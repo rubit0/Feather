@@ -1,0 +1,14 @@
+<linker>
+    <assembly fullname="System.Buffers" preserve="all"/>
+    <assembly fullname="System.Memory" preserve="all"/>
+    <assembly fullname="System.Numerics.Vectors" preserve="all"/>
+    <assembly fullname="System.Runtime.CompilerServices.Unsafe" preserve="all"/>
+    <assembly fullname="Esprima" preserve="all"/>
+    <assembly fullname="Jint" preserve="all"/>
+    <assembly fullname="UnityEngine" preserve="all"/>
+    <assembly fullname="UnityEngine.CoreModule" preserve="all"/>
+    <assembly fullname="System" preserve="all"/>
+    <assembly fullname="System.Core" preserve="all"/>
+    <assembly fullname="System.Linq.Expressions" preserve="all"/>
+    <assembly fullname="netstandard" preserve="all"/>
+</linker>
