@@ -41,6 +41,14 @@ namespace Feather.Analysis
 
         public static ScriptMeta AnalyzeScript(Script script)
         {
+            var functions = script.Body
+                .FirstOrDefault(b => b.Type == Nodes.ClassDeclaration)
+                ?.As<ClassDeclaration>()
+                .Body.ChildNodes.Where(n => n.Type == Nodes.MethodDefinition)
+                .Cast<MethodDefinition>()
+                .Select(md => md.ToString())
+                .ToList();
+            
             return new ScriptMeta
             {
                 Imports = GetImportsFromScript(script),
@@ -87,7 +95,8 @@ namespace Feather.Analysis
                     { 
                         Name = classDeclaration.Id.Name,
                         ExtendsJsBehaviour = classDeclaration.SuperClass?.ToString() == "jsBehaviour",
-                        Properties = GetClassProperties(classDeclaration.Body) 
+                        Properties = GetClassProperties(classDeclaration.Body),
+                        Methods = GetClassMethods(classDeclaration.Body)
                     })
                 .ToList();
         }
@@ -106,6 +115,15 @@ namespace Feather.Analysis
                         Decorator = classElement.Decorators.First().Expression.ToString(), 
                         Name = ((Identifier)classElement.Key).Name
                     })
+                .ToList();
+        }
+        
+        private static List<string> GetClassMethods(ClassBody classBody)
+        {
+            return classBody.
+                ChildNodes.Where(n => n.Type == Nodes.MethodDefinition)
+                .Cast<MethodDefinition>()
+                .Select(md => md.Key.ToString())
                 .ToList();
         }
     }

@@ -1,9 +1,8 @@
-using System;
+using System.Collections.Generic;
 using Feather.Analysis;
 using Jint;
 using Jint.Native.Object;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace Feather
 {
@@ -11,6 +10,8 @@ namespace Feather
     {
         public static Runtime Instance  { get; private set; }
         public Engine Engine { get; private set; }
+        public Dictionary<string, ScriptMeta> LoadedScripts { get; set; } 
+            = new Dictionary<string, ScriptMeta>();
         
         private void Awake()
         {
@@ -26,10 +27,15 @@ namespace Feather
                 cfg.Debugger.Enabled = true;
                 cfg.Interop.AllowGetType = true;
                 cfg.Interop.AllowSystemReflection = true;
-                cfg.AllowClr(typeof(GameObject).Assembly, typeof(Text).Assembly);
+                cfg.AllowClr(
+                    typeof(GameObject).Assembly, 
+                    typeof(Rigidbody).Assembly, 
+                    typeof(AudioListener).Assembly,
+                    typeof(Input).Assembly, 
+                    typeof(Canvas).Assembly
+                    );
             });
-            Engine.SetValue("float", new Func<double, float>(num => (float)num));
-            Engine.Execute("var unity = importNamespace('UnityEngine');");
+            Engine.Execute("var Unity = importNamespace('UnityEngine');");
             // Define base interface class
             Engine.Execute(@"class jsBehaviour {
                                 @GameObject
@@ -37,6 +43,21 @@ namespace Feather
                                 @Transform
                                 transform
                             }");
+            var allScripts = Resources.LoadAll<TextAsset>("Scripts");
+            foreach (var scriptText in allScripts)
+            {
+                var body = scriptText.text;
+                var script = Analyzer.ParseScript(body);
+                if (Analyzer.IsScriptValid(script))
+                {
+                    Engine.Execute(script);
+                    var scriptMeta = Analyzer.AnalyzeScript(script);
+                    if (Analyzer.HasJSBehaviour(scriptMeta))
+                    {
+                        LoadedScripts.Add(scriptMeta.Class.Name, scriptMeta);
+                    }
+                }
+            }
         }
 
         public ObjectInstance InstantiateClass(ClassMeta classMeta)
