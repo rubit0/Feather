@@ -36,14 +36,15 @@ namespace Feather
 
         private void Awake()
         {
-            if (!Runtime.Instance.LoadedScripts.ContainsKey(script.name))
+            var scriptName = script.name.Split('.')[0];
+            if (!Runtime.Instance.LoadedScripts.ContainsKey(scriptName))
             {
                 Debug.LogError($"Set script {script.name}is not valid.");
                 return;
             }
             
             // Get meta reference
-            _scriptMeta = Runtime.Instance.LoadedScripts[script.name];
+            _scriptMeta = Runtime.Instance.LoadedScripts[scriptName];
 
             // Create class instance
             _jsBehaviourInstance = Runtime.Instance.InstantiateClass(_scriptMeta.Class);
