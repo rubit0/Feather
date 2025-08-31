@@ -186,7 +186,8 @@ namespace Feather.Editor
         
         private System.Type GetUnityTypeFromDecorator(string decorator)
         {
-            return decorator switch
+            // First check built-in Unity types
+            var builtInType = decorator switch
             {
                 "GameObject" => typeof(GameObject),
                 "Transform" => typeof(Transform),
@@ -207,8 +208,43 @@ namespace Feather.Editor
                 "CapsuleCollider" => typeof(CapsuleCollider),
                 "MeshCollider" => typeof(MeshCollider),
                 "UnityEvent" => typeof(UnityEvent),
-                _ => typeof(Component)
+                _ => null
             };
+            
+            if (builtInType != null)
+                return builtInType;
+            
+            // Try to find custom MonoBehaviour types by name
+            try
+            {
+                // Search through all loaded assemblies for the type
+                foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    var type = assembly.GetType(decorator);
+                    if (type != null && typeof(Component).IsAssignableFrom(type))
+                    {
+                        return type;
+                    }
+                    
+                    // Also try to find by simple name (without namespace)
+                    var types = assembly.GetTypes().Where(t => 
+                        t.Name == decorator && 
+                        typeof(Component).IsAssignableFrom(t)).ToArray();
+                    
+                    if (types.Length > 0)
+                    {
+                        return types[0]; // Return first match
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                // If reflection fails, log warning but continue
+                Debug.LogWarning($"Could not resolve custom component type '{decorator}': {ex.Message}");
+            }
+            
+            // Default to generic Component if no specific type found
+            return typeof(Component);
         }
         
         private bool IsJavaScriptFile(TextAsset textAsset)

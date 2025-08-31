@@ -1156,6 +1156,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1089265570}
   - component: {fileID: 1089265571}
+  - component: {fileID: 1089265572}
   m_Layer: 0
   m_Name: ScriptTest
   m_TagString: Untagged
@@ -1228,6 +1229,18 @@ MonoBehaviour:
     unityEvent:
       m_PersistentCalls:
         m_Calls: []
+    gameObjectList:
+    - {fileID: 1827298385}
+    - {fileID: 809729237}
+    componentList: []
+    unityEventList: []
+  - name: myMono
+    isList: 0
+    gameObject: {fileID: 0}
+    component: {fileID: 1089265572}
+    unityEvent:
+      m_PersistentCalls:
+        m_Calls: []
     gameObjectList: []
     componentList: []
     unityEventList: []
@@ -1254,6 +1267,18 @@ MonoBehaviour:
     componentList: []
     unityEventList: []
   script: {fileID: 1042094116111776886, guid: 2f5a206b7f31f4bc58cc45243e571d49, type: 3}
+--- !u!114 &1089265572
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1089265568}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ab2d0850e63dd44ca84d20edf9d415e7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MyMono
 --- !u!1 &1193832504
 GameObject:
   m_ObjectHideFlags: 0

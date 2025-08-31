@@ -7,11 +7,14 @@ class scriptTest extends jsBehaviour {
     button;
     @List(GameObject)
     gameObjectsIterator;
+    @MyMono
+    myMono;
     @UnityEvent
     onInitCompleted;
     
     Awake(){
         Unity.Debug.Log('Called [Awake]');
+        this.myMono.HelloMono();
     }
 
     Start(){
