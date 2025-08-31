@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES6",
+    "lib": ["ES6"],
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "moduleResolution": "node",
+    "experimentalDecorators": true,
+    "noImplicitAny": false,
+    "noImplicitReturns": false,
+    "noImplicitThis": false
+  },
+  "include": [
+    "*.d.ts",
+    "../../../Resources/Scripts/**/*.txt",
+    "../../../Resources/Scripts/**/*.js",
+    "../../../**/*.js"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

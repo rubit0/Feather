@@ -4,5 +4,6 @@ namespace Feather.Analysis
     {
         public string Decorator { get; set; }
         public string Name { get; set; }
+        public bool IsArray { get; set; }
     }
 }

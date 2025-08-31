@@ -110,11 +110,34 @@ namespace Feather.Analysis
 
             return propertyDefinitions
                 .Select(classElement => 
-                    new Property
+                {
+                    var propertyName = ((Identifier)classElement.Key).Name;
+                    var decoratorExpression = classElement.Decorators.First().Expression;
+                    var decoratorText = decoratorExpression.ToString();
+                    var isArray = false;
+                    var actualDecorator = decoratorText;
+                    
+                    // Check for List(Type) pattern: @List(Button)
+                    if (decoratorText.StartsWith("List(") && decoratorText.EndsWith(")"))
                     {
-                        Decorator = classElement.Decorators.First().Expression.ToString(), 
-                        Name = ((Identifier)classElement.Key).Name
-                    })
+                        isArray = true;
+                        // Extract the type from List(Button) -> Button
+                        actualDecorator = decoratorText.Substring(5, decoratorText.Length - 6); // Remove "List(" and ")"
+                    }
+                    // Check for function call pattern: @Button()
+                    else if (decoratorText.EndsWith("()"))
+                    {
+                        isArray = false; // For now, assume () means single item
+                        actualDecorator = decoratorText.Substring(0, decoratorText.Length - 2); // Remove "()"
+                    }
+                    
+                    return new Property
+                    {
+                        Decorator = actualDecorator, 
+                        Name = propertyName,
+                        IsArray = isArray
+                    };
+                })
                 .ToList();
         }
         
