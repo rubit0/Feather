@@ -6,7 +6,7 @@ namespace Feather.Editor
     public static class FeatherMenuItems
     {
         [MenuItem("Component/Feather/JavaScript Behaviour", false, 0)]
-        public static void AddScriptBehaviour()
+        public static void AddJavaScriptBehaviour()
         {
             var selected = Selection.activeGameObject;
             if (selected == null)
@@ -17,7 +17,7 @@ namespace Feather.Editor
             }
             
             Undo.RegisterCreatedObjectUndo(selected, "Add JavaScript Behaviour");
-            var scriptBehaviour = selected.AddComponent<ScriptBehaviour>();
+            var scriptBehaviour = selected.AddComponent<JavaScriptBehaviour>();
             
             // Focus the inspector on the new component
             Selection.activeGameObject = selected;
@@ -27,7 +27,7 @@ namespace Feather.Editor
         }
         
         [MenuItem("Component/Feather/JavaScript Behaviour", true)]
-        public static bool ValidateAddScriptBehaviour()
+        public static bool ValidateAddJavaScriptBehaviour()
         {
             return Selection.activeGameObject != null;
         }
@@ -36,7 +36,7 @@ namespace Feather.Editor
         public static void CreateJavaScriptGameObject()
         {
             var go = new GameObject("JavaScript GameObject");
-            go.AddComponent<ScriptBehaviour>();
+            go.AddComponent<JavaScriptBehaviour>();
             
             // Position it in the scene
             if (SceneView.lastActiveSceneView?.camera != null)

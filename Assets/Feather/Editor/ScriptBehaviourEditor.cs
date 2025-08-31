@@ -9,14 +9,14 @@ using Feather.Analysis;
 
 namespace Feather.Editor
 {
-    [CustomEditor(typeof(ScriptBehaviour))]
-    public class ScriptBehaviourEditor : UnityEditor.Editor
+    [CustomEditor(typeof(JavaScriptBehaviour))]
+    public class JavaScriptBehaviourEditor : UnityEditor.Editor
     {
         private ScriptMeta _cachedScriptMeta;
         
         public override void OnInspectorGUI()
         {
-            var scriptBehaviour = (ScriptBehaviour)target;
+            var scriptBehaviour = (JavaScriptBehaviour)target;
             
             // Draw script field exactly like MonoBehaviour
             EditorGUI.BeginChangeCheck();
@@ -93,7 +93,7 @@ namespace Feather.Editor
             }
         }
         
-        private void CacheScriptMetadata(ScriptBehaviour scriptBehaviour)
+        private void CacheScriptMetadata(JavaScriptBehaviour scriptBehaviour)
         {
             try
             {
@@ -109,7 +109,7 @@ namespace Feather.Editor
             }
         }
         
-        private void DrawNativePropertyFields(ScriptBehaviour scriptBehaviour)
+        private void DrawNativePropertyFields(JavaScriptBehaviour scriptBehaviour)
         {
             var serializedObject = new SerializedObject(scriptBehaviour);
             var propertiesProperty = serializedObject.FindProperty("properties");
@@ -255,7 +255,7 @@ namespace Feather.Editor
             return assetPath.EndsWith(".js") || assetPath.EndsWith(".jsu") || assetPath.EndsWith(".jsfeather");
         }
         
-        private void AutoDetectAndCreateProperties(ScriptBehaviour scriptBehaviour, TextAsset scriptAsset)
+        private void AutoDetectAndCreateProperties(JavaScriptBehaviour scriptBehaviour, TextAsset scriptAsset)
         {
             try
             {
@@ -290,12 +290,12 @@ namespace Feather.Editor
             }
         }
         
-        private void SyncPropertiesWithScript(ScriptBehaviour scriptBehaviour, System.Collections.Generic.List<Property> decoratedProperties)
+        private void SyncPropertiesWithScript(JavaScriptBehaviour scriptBehaviour, System.Collections.Generic.List<Property> decoratedProperties)
         {
             Undo.RecordObject(scriptBehaviour, "Sync script properties");
             
-            var existingProperties = scriptBehaviour.properties?.ToList() ?? new System.Collections.Generic.List<ScriptBehaviour.BridgeProperties>();
-            var updatedProperties = new System.Collections.Generic.List<ScriptBehaviour.BridgeProperties>();
+            var existingProperties = scriptBehaviour.properties?.ToList() ?? new System.Collections.Generic.List<JavaScriptBehaviour.BridgeProperties>();
+            var updatedProperties = new System.Collections.Generic.List<JavaScriptBehaviour.BridgeProperties>();
             
             // Add or update properties from script
             foreach (var prop in decoratedProperties)
@@ -316,7 +316,7 @@ namespace Feather.Editor
                 else
                 {
                     // Create new property
-                    updatedProperties.Add(new ScriptBehaviour.BridgeProperties
+                    updatedProperties.Add(new JavaScriptBehaviour.BridgeProperties
                     {
                         name = prop.Name,
                         isList = prop.IsArray,

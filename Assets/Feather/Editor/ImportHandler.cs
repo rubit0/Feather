@@ -12,7 +12,7 @@ namespace Feather.Editor
         {
             var scriptContent = File.ReadAllText(ctx.assetPath);
             
-            // Import as TextAsset - this allows the file to be used with ScriptBehaviour
+            // Import as TextAsset - this allows the file to be used with JavaScriptBehaviour
             var textAsset = new TextAsset(scriptContent);
             ctx.AddObjectToAsset("main obj", textAsset);
             ctx.SetMainObject(textAsset);

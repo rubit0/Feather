@@ -5,16 +5,16 @@ namespace Feather.Editor
 {
     public static class FeatherDebugTools
     {
-        [MenuItem("Feather/Debug/List All ScriptBehaviours")]
-        public static void ListAllScriptBehaviours()
+        [MenuItem("Feather/Debug/List All JavaScriptBehaviours")]
+        public static void ListAllJavaScriptBehaviours()
         {
-            var scriptBehaviours = Object.FindObjectsByType<ScriptBehaviour>(FindObjectsSortMode.None);
+            var scriptBehaviours = Object.FindObjectsByType<JavaScriptBehaviour>(FindObjectsSortMode.None);
             
-            Debug.Log("=== Active ScriptBehaviours ===");
+            Debug.Log("=== Active JavaScriptBehaviours ===");
             
             if (scriptBehaviours.Length == 0)
             {
-                Debug.Log("No ScriptBehaviour components found in the scene.");
+                Debug.Log("No JavaScriptBehaviour components found in the scene.");
             }
             else
             {

@@ -11,7 +11,7 @@ using UnityEngine.Events;
 
 namespace Feather
 {
-    public class ScriptBehaviour : MonoBehaviour
+    public class JavaScriptBehaviour : MonoBehaviour
     {
         [Serializable]
         public class BridgeProperties

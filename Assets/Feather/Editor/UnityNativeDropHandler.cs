@@ -111,7 +111,7 @@ namespace Feather.Editor
         private static void AddJavaScriptComponent(GameObject gameObject, TextAsset jsFile)
         {
             // Check for duplicates
-            var existingBehaviours = gameObject.GetComponents<ScriptBehaviour>();
+            var existingBehaviours = gameObject.GetComponents<JavaScriptBehaviour>();
             foreach (var behaviour in existingBehaviours)
             {
                 if (behaviour.script == jsFile)
@@ -123,7 +123,7 @@ namespace Feather.Editor
             
             // Add the component
             Undo.RegisterCreatedObjectUndo(gameObject, $"Add JavaScript Component '{jsFile.name}'");
-            var scriptBehaviour = gameObject.AddComponent<ScriptBehaviour>();
+            var scriptBehaviour = gameObject.AddComponent<JavaScriptBehaviour>();
             
             Undo.RecordObject(scriptBehaviour, "Set JavaScript File");
             scriptBehaviour.script = jsFile;
@@ -141,7 +141,7 @@ namespace Feather.Editor
             // Debug.Log($"✅ Added JavaScript component '{jsFile.name}' to '{gameObject.name}'");
         }
         
-        private static void AutoDetectProperties(ScriptBehaviour scriptBehaviour, TextAsset jsFile)
+        private static void AutoDetectProperties(JavaScriptBehaviour scriptBehaviour, TextAsset jsFile)
         {
             try
             {
@@ -164,11 +164,11 @@ namespace Feather.Editor
                     
                 if (decoratedProperties.Any())
                 {
-                    var propertyBindings = new System.Collections.Generic.List<ScriptBehaviour.BridgeProperties>();
+                    var propertyBindings = new System.Collections.Generic.List<JavaScriptBehaviour.BridgeProperties>();
                     
                     foreach (var prop in decoratedProperties)
                     {
-                        propertyBindings.Add(new ScriptBehaviour.BridgeProperties
+                        propertyBindings.Add(new JavaScriptBehaviour.BridgeProperties
                         {
                             name = prop.Name,
                             isList = prop.IsArray,

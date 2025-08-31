@@ -158,13 +158,13 @@ namespace Feather
             // Update content cache
             _scriptContents[className] = currentContent;
             
-            // Notify all ScriptBehaviours using this script to reinitialize
+            // Notify all JavaScriptBehaviours using this script to reinitialize
             NotifyScriptReloaded(className);
         }
         
         private void NotifyScriptReloaded(string className)
         {
-            var allScriptBehaviours = FindObjectsByType<ScriptBehaviour>(FindObjectsSortMode.None);
+            var allScriptBehaviours = FindObjectsByType<JavaScriptBehaviour>(FindObjectsSortMode.None);
             foreach (var sb in allScriptBehaviours)
             {
                 if (sb.script != null && GetScriptClassName(sb.script) == className)
@@ -209,8 +209,8 @@ namespace Feather
             LoadScriptsFromArray(allScripts);
             LoadScriptsFromProject();
             
-            // Notify all ScriptBehaviours to reinitialize
-            var allScriptBehaviours = FindObjectsByType<ScriptBehaviour>(FindObjectsSortMode.None);
+            // Notify all JavaScriptBehaviours to reinitialize
+            var allScriptBehaviours = FindObjectsByType<JavaScriptBehaviour>(FindObjectsSortMode.None);
             foreach (var sb in allScriptBehaviours)
             {
                 if (sb.script != null)

@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Feather.Editor
 {
-    [CustomPropertyDrawer(typeof(ScriptBehaviour.BridgeProperties))]
+    [CustomPropertyDrawer(typeof(JavaScriptBehaviour.BridgeProperties))]
     public class BridgePropertiesDrawer : PropertyDrawer
     {
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
@@ -41,7 +41,7 @@ namespace Feather.Editor
         
         private string GetDecoratorFromProperty(SerializedProperty property)
         {
-            // Try to get the decorator type from the ScriptBehaviourEditor if available
+            // Try to get the decorator type from the JavaScriptBehaviourEditor if available
             // This is a simplified version - in a real implementation you'd want to
             // get this from the analyzed script metadata
             return "Component"; // Default fallback
@@ -49,12 +49,12 @@ namespace Feather.Editor
     }
     
     // Custom property drawer for the script field to handle JavaScript files better
-    [CustomPropertyDrawer(typeof(ScriptBehaviour), true)]
-    public class ScriptBehaviourDrawer : PropertyDrawer
+    [CustomPropertyDrawer(typeof(JavaScriptBehaviour), true)]
+    public class JavaScriptBehaviourDrawer : PropertyDrawer
     {
         public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
         {
-            // This will be handled by the ScriptBehaviourEditor instead
+            // This will be handled by the JavaScriptBehaviourEditor instead
             EditorGUI.PropertyField(position, property, label);
         }
     }
