@@ -198,10 +198,20 @@ namespace Feather.Editor
         
         private static void GenerateCommonMembers(Type type, StringBuilder sb, string indent, bool isStatic)
         {
-            // Only include the most commonly used members to keep definitions clean
+            // Get fields (Vector3.x, y, z are fields, not properties!)
+            var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
+                .Where(f => IsCommonMember(f.Name))
+                .Take(15);
+                
+            foreach (var field in fields)
+            {
+                GenerateFieldDefinition(field, sb, indent, isStatic);
+            }
+            
+            // Only include the most commonly used properties to keep definitions clean
             var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
                 .Where(p => p.GetIndexParameters().Length == 0 && IsCommonMember(p.Name))
-                .Take(10); // Limit to avoid overwhelming IntelliSense
+                .Take(15); // Increased limit for math types
                 
             foreach (var prop in properties)
             {
@@ -212,7 +222,7 @@ namespace Feather.Editor
                 .Where(m => !m.IsSpecialName && m.DeclaringType == type && IsCommonMember(m.Name))
                 .GroupBy(m => m.Name)
                 .Select(g => g.First())
-                .Take(10);
+                .Take(15); // Increased limit for math types
                 
             foreach (var method in methods)
             {
@@ -251,7 +261,35 @@ namespace Feather.Editor
                 "material", "materials", "bounds", "enabled",
                 
                 // UI
-                "text", "color", "sprite", "onClick", "onValueChanged", "AddListener"
+                "text", "color", "sprite", "onClick", "onValueChanged", "AddListener",
+                
+                // Vector3 properties and methods
+                "x", "y", "z", "magnitude", "sqrMagnitude", "normalized",
+                "Set", "Scale", "Normalize", "Cross", "Dot", "Lerp", "Slerp", "MoveTowards",
+                "Distance", "Angle", "Project", "ProjectOnPlane", "Reflect",
+                "zero", "one", "up", "down", "left", "right", "forward", "back",
+                
+                // Vector2 properties and methods  
+                "magnitude", "sqrMagnitude", "normalized", "perpendicular",
+                "Set", "Scale", "Normalize", "Dot", "Lerp", "MoveTowards", "Distance", "Angle",
+                "zero", "one", "up", "down", "left", "right",
+                
+                // Quaternion properties and methods
+                "w", "eulerAngles", "identity",
+                "Set", "SetLookRotation", "ToAngleAxis", "FromToRotation", "LookRotation",
+                "Lerp", "Slerp", "RotateTowards", "Inverse", "Angle", "Euler", "AngleAxis",
+                
+                // Color properties and methods
+                "r", "g", "b", "a", "grayscale", "gamma", "linear",
+                "red", "green", "blue", "white", "black", "yellow", "cyan", "magenta", "gray", "clear",
+                "Lerp", "LerpUnclamped", "HSVToRGB", "RGBToHSV",
+                
+                // Rect properties
+                "width", "height", "size", "min", "max", "center",
+                "xMin", "xMax", "yMin", "yMax", "Contains", "Overlaps",
+                
+                // Random methods
+                "Range", "value", "insideUnitSphere", "insideUnitCircle", "onUnitSphere", "rotation", "rotationUniform"
             };
             
             return commonMembers.Contains(memberName);
@@ -264,6 +302,15 @@ namespace Feather.Editor
             var typeName = GetTypeScriptTypeName(prop.PropertyType);
             
             sb.AppendLine($"{indent}{staticKeyword}{readOnly}{prop.Name}: {typeName};");
+        }
+        
+        private static void GenerateFieldDefinition(FieldInfo field, StringBuilder sb, string indent, bool isStatic)
+        {
+            var staticKeyword = isStatic || field.IsStatic ? "static " : "";
+            var readOnly = field.IsInitOnly ? "readonly " : "";
+            var typeName = GetTypeScriptTypeName(field.FieldType);
+            
+            sb.AppendLine($"{indent}{staticKeyword}{readOnly}{field.Name}: {typeName};");
         }
         
         private static void GenerateMethodDefinition(MethodInfo method, StringBuilder sb, string indent, bool isStatic)
@@ -322,6 +369,42 @@ namespace Feather.Editor
             sb.AppendLine("    LateUpdate?(): void;");
             sb.AppendLine("    FixedUpdate?(): void;");
             sb.AppendLine("    OnDestroy?(): void;");
+            sb.AppendLine();
+            sb.AppendLine("    // Physics 3D methods");
+            sb.AppendLine("    OnCollisionEnter?(collision: Unity.Collision): void;");
+            sb.AppendLine("    OnCollisionStay?(collision: Unity.Collision): void;");
+            sb.AppendLine("    OnCollisionExit?(collision: Unity.Collision): void;");
+            sb.AppendLine("    OnTriggerEnter?(other: Unity.Collider): void;");
+            sb.AppendLine("    OnTriggerStay?(other: Unity.Collider): void;");
+            sb.AppendLine("    OnTriggerExit?(other: Unity.Collider): void;");
+            sb.AppendLine();
+            sb.AppendLine("    // Physics 2D methods");
+            sb.AppendLine("    OnCollisionEnter2D?(collision: Unity.Collision2D): void;");
+            sb.AppendLine("    OnCollisionStay2D?(collision: Unity.Collision2D): void;");
+            sb.AppendLine("    OnCollisionExit2D?(collision: Unity.Collision2D): void;");
+            sb.AppendLine("    OnTriggerEnter2D?(other: Unity.Collider2D): void;");
+            sb.AppendLine("    OnTriggerStay2D?(other: Unity.Collider2D): void;");
+            sb.AppendLine("    OnTriggerExit2D?(other: Unity.Collider2D): void;");
+            sb.AppendLine();
+            sb.AppendLine("    // Rendering methods");
+            sb.AppendLine("    OnBecameVisible?(): void;");
+            sb.AppendLine("    OnBecameInvisible?(): void;");
+            sb.AppendLine("    OnWillRenderObject?(): void;");
+            sb.AppendLine("    OnRenderObject?(): void;");
+            sb.AppendLine();
+            sb.AppendLine("    // Application methods");
+            sb.AppendLine("    OnApplicationFocus?(hasFocus: boolean): void;");
+            sb.AppendLine("    OnApplicationPause?(pauseStatus: boolean): void;");
+            sb.AppendLine("    OnApplicationQuit?(): void;");
+            sb.AppendLine();
+            sb.AppendLine("    // GUI & Gizmo methods");
+            sb.AppendLine("    OnGUI?(): void;");
+            sb.AppendLine("    OnDrawGizmos?(): void;");
+            sb.AppendLine("    OnDrawGizmosSelected?(): void;");
+            sb.AppendLine();
+            sb.AppendLine("    // Animation methods");
+            sb.AppendLine("    OnAnimatorIK?(layerIndex: number): void;");
+            sb.AppendLine("    OnAnimatorMove?(): void;");
             sb.AppendLine("}");
             sb.AppendLine();
             

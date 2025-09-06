@@ -1,6 +1,6 @@
 // Auto-generated Unity TypeScript definitions for Feather
 // These are for IntelliSense only - actual code runs as ES6 JavaScript in Jint
-// Generated at: 2025-09-06 13:27:37
+// Generated at: 2025-09-06 14:44:08
 
 declare namespace Unity {
     class Behaviour extends Component {
@@ -23,6 +23,27 @@ declare namespace Unity {
     }
 
     interface Color {
+        r: number;
+        g: number;
+        b: number;
+        a: number;
+        readonly grayscale: number;
+        readonly linear: Unity.Color;
+        readonly gamma: Unity.Color;
+        static readonly black: Unity.Color;
+        static readonly blue: Unity.Color;
+        static readonly clear: Unity.Color;
+        static readonly cyan: Unity.Color;
+        static readonly gray: Unity.Color;
+        static readonly green: Unity.Color;
+        static readonly magenta: Unity.Color;
+        static readonly red: Unity.Color;
+        static readonly white: Unity.Color;
+        static readonly yellow: Unity.Color;
+        static Lerp(a: Unity.Color, b: Unity.Color, t: number): Unity.Color;
+        static LerpUnclamped(a: Unity.Color, b: Unity.Color, t: number): Unity.Color;
+        static RGBToHSV(rgbColor: Unity.Color, H: any, S: any, V: any): void;
+        static HSVToRGB(H: number, S: number, V: number): Unity.Color;
     }
 
     class Component {
@@ -433,14 +454,59 @@ declare namespace Unity {
     }
 
     interface Quaternion {
+        x: number;
+        y: number;
+        z: number;
+        w: number;
+        static readonly identity: Unity.Quaternion;
+        eulerAngles: Unity.Vector3;
+        readonly normalized: Unity.Quaternion;
+        static FromToRotation(fromDirection: Unity.Vector3, toDirection: Unity.Vector3): Unity.Quaternion;
+        static Inverse(rotation: Unity.Quaternion): Unity.Quaternion;
+        static Slerp(a: Unity.Quaternion, b: Unity.Quaternion, t: number): Unity.Quaternion;
+        static Lerp(a: Unity.Quaternion, b: Unity.Quaternion, t: number): Unity.Quaternion;
+        static LerpUnclamped(a: Unity.Quaternion, b: Unity.Quaternion, t: number): Unity.Quaternion;
+        static AngleAxis(angle: number, axis: Unity.Vector3): Unity.Quaternion;
+        static LookRotation(forward: Unity.Vector3, upwards: Unity.Vector3): Unity.Quaternion;
+        Set(newX: number, newY: number, newZ: number, newW: number): void;
+        static Dot(a: Unity.Quaternion, b: Unity.Quaternion): number;
+        SetLookRotation(view: Unity.Vector3): void;
+        static Angle(a: Unity.Quaternion, b: Unity.Quaternion): number;
+        static Euler(x: number, y: number, z: number): Unity.Quaternion;
+        ToAngleAxis(angle: any, axis: Unity.Vector3&): void;
+        static RotateTowards(from: Unity.Quaternion, to: Unity.Quaternion, maxDegreesDelta: number): Unity.Quaternion;
+        static Normalize(q: Unity.Quaternion): Unity.Quaternion;
     }
 
     namespace Random {
+        static readonly value: number;
+        static readonly insideUnitSphere: Unity.Vector3;
+        static readonly insideUnitCircle: Unity.Vector2;
+        static readonly onUnitSphere: Unity.Vector3;
         static readonly rotation: Unity.Quaternion;
+        static readonly rotationUniform: Unity.Quaternion;
+        static Range(minInclusive: number, maxInclusive: number): number;
     }
 
     interface Rect {
+        static readonly zero: Unity.Rect;
+        x: number;
+        y: number;
         position: Unity.Vector2;
+        center: Unity.Vector2;
+        min: Unity.Vector2;
+        max: Unity.Vector2;
+        width: number;
+        height: number;
+        size: Unity.Vector2;
+        xMin: number;
+        yMin: number;
+        xMax: number;
+        yMax: number;
+        readonly left: number;
+        Set(x: number, y: number, width: number, height: number): void;
+        Contains(point: Unity.Vector2): boolean;
+        Overlaps(other: Unity.Rect): boolean;
     }
 
     class Renderer extends Component {
@@ -469,6 +535,10 @@ declare namespace Unity {
     class Transform extends Component {
         position: Unity.Vector3;
         localPosition: Unity.Vector3;
+        eulerAngles: Unity.Vector3;
+        right: Unity.Vector3;
+        up: Unity.Vector3;
+        forward: Unity.Vector3;
         rotation: Unity.Quaternion;
         localRotation: Unity.Quaternion;
         localScale: Unity.Vector3;
@@ -482,12 +552,80 @@ declare namespace Unity {
     }
 
     interface Vector2 {
+        x: number;
+        y: number;
+        readonly normalized: Unity.Vector2;
+        readonly magnitude: number;
+        readonly sqrMagnitude: number;
+        static readonly zero: Unity.Vector2;
+        static readonly one: Unity.Vector2;
+        static readonly up: Unity.Vector2;
+        static readonly down: Unity.Vector2;
+        static readonly left: Unity.Vector2;
+        static readonly right: Unity.Vector2;
+        Set(newX: number, newY: number): void;
+        static Lerp(a: Unity.Vector2, b: Unity.Vector2, t: number): Unity.Vector2;
+        static LerpUnclamped(a: Unity.Vector2, b: Unity.Vector2, t: number): Unity.Vector2;
+        static MoveTowards(current: Unity.Vector2, target: Unity.Vector2, maxDistanceDelta: number): Unity.Vector2;
+        static Scale(a: Unity.Vector2, b: Unity.Vector2): Unity.Vector2;
+        Normalize(): void;
+        static Reflect(inDirection: Unity.Vector2, inNormal: Unity.Vector2): Unity.Vector2;
+        static Dot(lhs: Unity.Vector2, rhs: Unity.Vector2): number;
+        static Angle(from: Unity.Vector2, to: Unity.Vector2): number;
+        static Distance(a: Unity.Vector2, b: Unity.Vector2): number;
     }
 
     interface Vector3 {
+        x: number;
+        y: number;
+        z: number;
+        readonly normalized: Unity.Vector3;
+        readonly magnitude: number;
+        readonly sqrMagnitude: number;
+        static readonly zero: Unity.Vector3;
+        static readonly one: Unity.Vector3;
+        static readonly forward: Unity.Vector3;
+        static readonly back: Unity.Vector3;
+        static readonly up: Unity.Vector3;
+        static readonly down: Unity.Vector3;
+        static readonly left: Unity.Vector3;
+        static readonly right: Unity.Vector3;
+        static Slerp(a: Unity.Vector3, b: Unity.Vector3, t: number): Unity.Vector3;
+        static RotateTowards(current: Unity.Vector3, target: Unity.Vector3, maxRadiansDelta: number, maxMagnitudeDelta: number): Unity.Vector3;
+        static Lerp(a: Unity.Vector3, b: Unity.Vector3, t: number): Unity.Vector3;
+        static LerpUnclamped(a: Unity.Vector3, b: Unity.Vector3, t: number): Unity.Vector3;
+        static MoveTowards(current: Unity.Vector3, target: Unity.Vector3, maxDistanceDelta: number): Unity.Vector3;
+        Set(newX: number, newY: number, newZ: number): void;
+        static Scale(a: Unity.Vector3, b: Unity.Vector3): Unity.Vector3;
+        static Cross(lhs: Unity.Vector3, rhs: Unity.Vector3): Unity.Vector3;
+        static Reflect(inDirection: Unity.Vector3, inNormal: Unity.Vector3): Unity.Vector3;
+        static Normalize(value: Unity.Vector3): Unity.Vector3;
+        static Dot(lhs: Unity.Vector3, rhs: Unity.Vector3): number;
+        static Project(vector: Unity.Vector3, onNormal: Unity.Vector3): Unity.Vector3;
+        static ProjectOnPlane(vector: Unity.Vector3, planeNormal: Unity.Vector3): Unity.Vector3;
+        static Angle(from: Unity.Vector3, to: Unity.Vector3): number;
+        static Distance(a: Unity.Vector3, b: Unity.Vector3): number;
     }
 
     interface Vector4 {
+        x: number;
+        y: number;
+        z: number;
+        w: number;
+        readonly normalized: Unity.Vector4;
+        readonly magnitude: number;
+        readonly sqrMagnitude: number;
+        static readonly zero: Unity.Vector4;
+        static readonly one: Unity.Vector4;
+        Set(newX: number, newY: number, newZ: number, newW: number): void;
+        static Lerp(a: Unity.Vector4, b: Unity.Vector4, t: number): Unity.Vector4;
+        static LerpUnclamped(a: Unity.Vector4, b: Unity.Vector4, t: number): Unity.Vector4;
+        static MoveTowards(current: Unity.Vector4, target: Unity.Vector4, maxDistanceDelta: number): Unity.Vector4;
+        static Scale(a: Unity.Vector4, b: Unity.Vector4): Unity.Vector4;
+        static Normalize(a: Unity.Vector4): Unity.Vector4;
+        static Dot(a: Unity.Vector4, b: Unity.Vector4): number;
+        static Project(a: Unity.Vector4, b: Unity.Vector4): Unity.Vector4;
+        static Distance(a: Unity.Vector4, b: Unity.Vector4): number;
     }
 
     class Collider extends Component {
@@ -518,6 +656,7 @@ declare namespace Unity {
         readonly transform: Unity.Transform;
         readonly gameObject: Unity.GameObject;
         tag: string;
+        name: string;
         AddForce(force: Unity.Vector3, mode: Unity.ForceMode): void;
         AddTorque(torque: Unity.Vector3, mode: Unity.ForceMode): void;
     }

@@ -37,7 +37,28 @@ namespace Feather
             = new Dictionary<string, FunctionInstance>();
         private static readonly string[] LifecycleMethodNames =
         {
-            "Awake", "Start", "OnEnable", "OnDisable", "Update", "LateUpdate", "FixedUpdate", "OnDestroy"
+            // Basic lifecycle
+            "Awake", "Start", "OnEnable", "OnDisable", "Update", "LateUpdate", "FixedUpdate", "OnDestroy",
+            
+            // Physics 3D
+            "OnCollisionEnter", "OnCollisionStay", "OnCollisionExit",
+            "OnTriggerEnter", "OnTriggerStay", "OnTriggerExit",
+            
+            // Physics 2D
+            "OnCollisionEnter2D", "OnCollisionStay2D", "OnCollisionExit2D",
+            "OnTriggerEnter2D", "OnTriggerStay2D", "OnTriggerExit2D",
+            
+            // Rendering
+            "OnBecameVisible", "OnBecameInvisible", "OnWillRenderObject", "OnRenderObject",
+            
+            // Application
+            "OnApplicationFocus", "OnApplicationPause", "OnApplicationQuit",
+            
+            // GUI & Gizmos
+            "OnGUI", "OnDrawGizmos", "OnDrawGizmosSelected",
+            
+            // Animation
+            "OnAnimatorIK", "OnAnimatorMove"
         };
 
         private void Awake()
@@ -193,6 +214,204 @@ namespace Feather
             if (_gameObjectLifeCycleCallbacks.ContainsKey("OnDestroy"))
             {
                 _gameObjectLifeCycleCallbacks["OnDestroy"].Call(_jsBehaviourInstance);
+            }
+        }
+        
+        // Physics 3D Methods
+        private void OnCollisionEnter(Collision collision)
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnCollisionEnter"))
+            {
+                _gameObjectLifeCycleCallbacks["OnCollisionEnter"].Call(_jsBehaviourInstance, JsValue.FromObject(Runtime.Instance.Engine, collision));
+            }
+        }
+        
+        private void OnCollisionStay(Collision collision)
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnCollisionStay"))
+            {
+                _gameObjectLifeCycleCallbacks["OnCollisionStay"].Call(_jsBehaviourInstance, JsValue.FromObject(Runtime.Instance.Engine, collision));
+            }
+        }
+        
+        private void OnCollisionExit(Collision collision)
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnCollisionExit"))
+            {
+                _gameObjectLifeCycleCallbacks["OnCollisionExit"].Call(_jsBehaviourInstance, JsValue.FromObject(Runtime.Instance.Engine, collision));
+            }
+        }
+        
+        private void OnTriggerEnter(Collider other)
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnTriggerEnter"))
+            {
+                _gameObjectLifeCycleCallbacks["OnTriggerEnter"].Call(_jsBehaviourInstance, JsValue.FromObject(Runtime.Instance.Engine, other));
+            }
+        }
+        
+        private void OnTriggerStay(Collider other)
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnTriggerStay"))
+            {
+                _gameObjectLifeCycleCallbacks["OnTriggerStay"].Call(_jsBehaviourInstance, JsValue.FromObject(Runtime.Instance.Engine, other));
+            }
+        }
+        
+        private void OnTriggerExit(Collider other)
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnTriggerExit"))
+            {
+                _gameObjectLifeCycleCallbacks["OnTriggerExit"].Call(_jsBehaviourInstance, JsValue.FromObject(Runtime.Instance.Engine, other));
+            }
+        }
+        
+        // Physics 2D Methods
+        private void OnCollisionEnter2D(Collision2D collision)
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnCollisionEnter2D"))
+            {
+                _gameObjectLifeCycleCallbacks["OnCollisionEnter2D"].Call(_jsBehaviourInstance, JsValue.FromObject(Runtime.Instance.Engine, collision));
+            }
+        }
+        
+        private void OnCollisionStay2D(Collision2D collision)
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnCollisionStay2D"))
+            {
+                _gameObjectLifeCycleCallbacks["OnCollisionStay2D"].Call(_jsBehaviourInstance, JsValue.FromObject(Runtime.Instance.Engine, collision));
+            }
+        }
+        
+        private void OnCollisionExit2D(Collision2D collision)
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnCollisionExit2D"))
+            {
+                _gameObjectLifeCycleCallbacks["OnCollisionExit2D"].Call(_jsBehaviourInstance, JsValue.FromObject(Runtime.Instance.Engine, collision));
+            }
+        }
+        
+        private void OnTriggerEnter2D(Collider2D other)
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnTriggerEnter2D"))
+            {
+                _gameObjectLifeCycleCallbacks["OnTriggerEnter2D"].Call(_jsBehaviourInstance, JsValue.FromObject(Runtime.Instance.Engine, other));
+            }
+        }
+        
+        private void OnTriggerStay2D(Collider2D other)
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnTriggerStay2D"))
+            {
+                _gameObjectLifeCycleCallbacks["OnTriggerStay2D"].Call(_jsBehaviourInstance, JsValue.FromObject(Runtime.Instance.Engine, other));
+            }
+        }
+        
+        private void OnTriggerExit2D(Collider2D other)
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnTriggerExit2D"))
+            {
+                _gameObjectLifeCycleCallbacks["OnTriggerExit2D"].Call(_jsBehaviourInstance, JsValue.FromObject(Runtime.Instance.Engine, other));
+            }
+        }
+        
+        // Rendering Methods
+        private void OnBecameVisible()
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnBecameVisible"))
+            {
+                _gameObjectLifeCycleCallbacks["OnBecameVisible"].Call(_jsBehaviourInstance);
+            }
+        }
+        
+        private void OnBecameInvisible()
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnBecameInvisible"))
+            {
+                _gameObjectLifeCycleCallbacks["OnBecameInvisible"].Call(_jsBehaviourInstance);
+            }
+        }
+        
+        private void OnWillRenderObject()
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnWillRenderObject"))
+            {
+                _gameObjectLifeCycleCallbacks["OnWillRenderObject"].Call(_jsBehaviourInstance);
+            }
+        }
+        
+        private void OnRenderObject()
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnRenderObject"))
+            {
+                _gameObjectLifeCycleCallbacks["OnRenderObject"].Call(_jsBehaviourInstance);
+            }
+        }
+        
+        // Application Methods
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnApplicationFocus"))
+            {
+                _gameObjectLifeCycleCallbacks["OnApplicationFocus"].Call(_jsBehaviourInstance, JsValue.FromObject(Runtime.Instance.Engine, hasFocus));
+            }
+        }
+        
+        private void OnApplicationPause(bool pauseStatus)
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnApplicationPause"))
+            {
+                _gameObjectLifeCycleCallbacks["OnApplicationPause"].Call(_jsBehaviourInstance, JsValue.FromObject(Runtime.Instance.Engine, pauseStatus));
+            }
+        }
+        
+        private void OnApplicationQuit()
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnApplicationQuit"))
+            {
+                _gameObjectLifeCycleCallbacks["OnApplicationQuit"].Call(_jsBehaviourInstance);
+            }
+        }
+        
+        // GUI & Gizmo Methods
+        private void OnGUI()
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnGUI"))
+            {
+                _gameObjectLifeCycleCallbacks["OnGUI"].Call(_jsBehaviourInstance);
+            }
+        }
+        
+        private void OnDrawGizmos()
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnDrawGizmos"))
+            {
+                _gameObjectLifeCycleCallbacks["OnDrawGizmos"].Call(_jsBehaviourInstance);
+            }
+        }
+        
+        private void OnDrawGizmosSelected()
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnDrawGizmosSelected"))
+            {
+                _gameObjectLifeCycleCallbacks["OnDrawGizmosSelected"].Call(_jsBehaviourInstance);
+            }
+        }
+        
+        // Animation Methods
+        private void OnAnimatorIK(int layerIndex)
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnAnimatorIK"))
+            {
+                _gameObjectLifeCycleCallbacks["OnAnimatorIK"].Call(_jsBehaviourInstance, JsValue.FromObject(Runtime.Instance.Engine, layerIndex));
+            }
+        }
+        
+        private void OnAnimatorMove()
+        {
+            if (_gameObjectLifeCycleCallbacks.ContainsKey("OnAnimatorMove"))
+            {
+                _gameObjectLifeCycleCallbacks["OnAnimatorMove"].Call(_jsBehaviourInstance);
             }
         }
         
