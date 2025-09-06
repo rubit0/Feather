@@ -1,6 +1,6 @@
 // Feather-specific TypeScript definitions
 // These provide IntelliSense for Feather's JavaScript runtime
-// Generated at: 2025-08-31 19:59:52
+// Generated at: 2025-09-06 13:27:37
 
 declare class jsBehaviour {
     gameObject: Unity.GameObject;

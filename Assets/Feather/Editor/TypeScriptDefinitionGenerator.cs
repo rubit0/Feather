@@ -11,9 +11,10 @@ namespace Feather.Editor
 {
     public static class TypeScriptDefinitionGenerator
     {
-        private const string OUTPUT_PATH = "Assets/Feather/Editor/Generated/";
+        private const string OUTPUT_PATH = "";
         private const string UNITY_DEFINITIONS_FILE = "Unity.d.ts";
         private const string FEATHER_DEFINITIONS_FILE = "Feather.d.ts";
+        private const string JSCONFIG_FILE = "jsconfig.json";
         
         // Types to exclude from generation (internal Unity types)
         private static readonly HashSet<string> ExcludedTypes = new HashSet<string>
@@ -21,7 +22,7 @@ namespace Feather.Editor
             "Internal", "Editor", "Networking", "Experimental"
         };
         
-        [MenuItem("Feather/Generate TypeScript Definitions")]
+        [MenuItem("Feather/Setup JS Dev Environment")]
         public static void GenerateDefinitions()
         {
             try
@@ -34,12 +35,15 @@ namespace Feather.Editor
                 WriteDefinitionFile(UNITY_DEFINITIONS_FILE, unityDefinitions);
                 WriteDefinitionFile(FEATHER_DEFINITIONS_FILE, featherDefinitions);
                 
-                Debug.Log($"TypeScript definitions generated successfully at {OUTPUT_PATH}");
+                var jsConfig = GenerateJSConfig();
+                WriteDefinitionFile(JSCONFIG_FILE, jsConfig);
+                
+                Debug.Log($"JavaScript development environment setup complete! Files generated at project root");
                 AssetDatabase.Refresh();
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Failed to generate TypeScript definitions: {ex.Message}");
+                Debug.LogError($"Failed to setup JavaScript development environment: {ex.Message}");
             }
         }
         
@@ -349,9 +353,46 @@ namespace Feather.Editor
             return sb.ToString();
         }
         
+        private static string GenerateJSConfig()
+        {
+            var sb = new StringBuilder();
+            
+            sb.AppendLine("{");
+            sb.AppendLine("  \"compilerOptions\": {");
+            sb.AppendLine("    \"target\": \"ES6\",");
+            sb.AppendLine("    \"lib\": [\"ES6\"],");
+            sb.AppendLine("    \"allowJs\": true,");
+            sb.AppendLine("    \"checkJs\": false,");
+            sb.AppendLine("    \"noEmit\": true,");
+            sb.AppendLine("    \"skipLibCheck\": true,");
+            sb.AppendLine("    \"moduleResolution\": \"node\",");
+            sb.AppendLine("    \"experimentalDecorators\": true,");
+            sb.AppendLine("    \"noImplicitAny\": false,");
+            sb.AppendLine("    \"noImplicitReturns\": false,");
+            sb.AppendLine("    \"noImplicitThis\": false");
+            sb.AppendLine("  },");
+            sb.AppendLine("  \"include\": [");
+            sb.AppendLine("    \"*.d.ts\",");
+            sb.AppendLine("    \"*.js\",");
+            sb.AppendLine("    \"**/*.js\"");
+            sb.AppendLine("  ],");
+            sb.AppendLine("  \"exclude\": [");
+            sb.AppendLine("    \"node_modules\",");
+            sb.AppendLine("    \"Library/**/*\",");
+            sb.AppendLine("    \"Logs/**/*\",");
+            sb.AppendLine("    \"Temp/**/*\",");
+            sb.AppendLine("    \"UserSettings/**/*\"");
+            sb.AppendLine("  ]");
+            sb.AppendLine("}");
+            
+            return sb.ToString();
+        }
+        
         private static void EnsureDirectoryExists()
         {
-            var fullPath = Path.Combine(Application.dataPath, OUTPUT_PATH.Replace("Assets/", ""));
+            // Project root is one level above Assets folder
+            var projectRoot = Directory.GetParent(Application.dataPath).FullName;
+            var fullPath = Path.Combine(projectRoot, OUTPUT_PATH);
             if (!Directory.Exists(fullPath))
             {
                 Directory.CreateDirectory(fullPath);
@@ -360,7 +401,9 @@ namespace Feather.Editor
         
         private static void WriteDefinitionFile(string fileName, string content)
         {
-            var fullPath = Path.Combine(OUTPUT_PATH, fileName);
+            // Project root is one level above Assets folder
+            var projectRoot = Directory.GetParent(Application.dataPath).FullName;
+            var fullPath = Path.Combine(projectRoot, OUTPUT_PATH, fileName);
             File.WriteAllText(fullPath, content);
         }
     }

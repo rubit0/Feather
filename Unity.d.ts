@@ -1,6 +1,6 @@
 // Auto-generated Unity TypeScript definitions for Feather
 // These are for IntelliSense only - actual code runs as ES6 JavaScript in Jint
-// Generated at: 2025-08-31 19:59:52
+// Generated at: 2025-09-06 13:27:37
 
 declare namespace Unity {
     class Behaviour extends Component {

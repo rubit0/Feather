@@ -14,11 +14,14 @@
   },
   "include": [
     "*.d.ts",
-    "../../../Resources/Scripts/**/*.txt",
-    "../../../Resources/Scripts/**/*.js",
-    "../../../**/*.js"
+    "*.js",
+    "**/*.js"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "Library/**/*",
+    "Logs/**/*",
+    "Temp/**/*",
+    "UserSettings/**/*"
   ]
 }

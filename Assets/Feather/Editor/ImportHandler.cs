@@ -19,8 +19,15 @@ namespace Feather.Editor
             
             // Debug.Log($"Imported Feather JavaScript: {ctx.assetPath}");
             
-            // Ensure TypeScript definitions are available for IntelliSense
-            if (!File.Exists("Assets/Feather/Editor/Generated/Unity.d.ts"))
+            // Ensure development environment is setup for IntelliSense
+            var projectRoot = Directory.GetParent(Application.dataPath).FullName;
+            var unityDefinitionsPath = Path.Combine(projectRoot, "Unity.d.ts");
+            var featherDefinitionsPath = Path.Combine(projectRoot, "Feather.d.ts");
+            var jsconfigPath = Path.Combine(projectRoot, "jsconfig.json");
+            
+            if (!File.Exists(unityDefinitionsPath) || 
+                !File.Exists(featherDefinitionsPath) ||
+                !File.Exists(jsconfigPath))
             {
                 TypeScriptDefinitionGenerator.GenerateDefinitions();
             }

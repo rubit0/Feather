@@ -8,12 +8,12 @@ namespace Feather.Editor
     {
         static TypeScriptDefinitionProcessor()
         {
-            // Auto-generate on script reload if definitions don't exist
+            // Auto-setup development environment on script reload if files don't exist
             EditorApplication.delayCall += () =>
             {
                 if (ShouldRegenerateDefinitions())
                 {
-                    // Debug.Log("Generating TypeScript definitions for Feather...");
+                    // Debug.Log("Setting up Feather JavaScript development environment...");
                     TypeScriptDefinitionGenerator.GenerateDefinitions();
                 }
             };
@@ -21,12 +21,16 @@ namespace Feather.Editor
         
         private static bool ShouldRegenerateDefinitions()
         {
-            var unityDefinitionsPath = "Assets/Feather/Editor/Generated/Unity.d.ts";
-            var featherDefinitionsPath = "Assets/Feather/Editor/Generated/Feather.d.ts";
+            // Project root is one level above Assets folder
+            var projectRoot = System.IO.Directory.GetParent(Application.dataPath).FullName;
+            var unityDefinitionsPath = System.IO.Path.Combine(projectRoot, "Unity.d.ts");
+            var featherDefinitionsPath = System.IO.Path.Combine(projectRoot, "Feather.d.ts");
+            var jsconfigPath = System.IO.Path.Combine(projectRoot, "jsconfig.json");
             
             // Check if definitions exist
             return !System.IO.File.Exists(unityDefinitionsPath) || 
-                   !System.IO.File.Exists(featherDefinitionsPath);
+                   !System.IO.File.Exists(featherDefinitionsPath) ||
+                   !System.IO.File.Exists(jsconfigPath);
         }
     }
 }
