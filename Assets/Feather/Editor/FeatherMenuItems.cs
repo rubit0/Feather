@@ -51,7 +51,7 @@ namespace Feather.Editor
             // Debug.Log("Created new GameObject with JavaScript Behaviour. Assign a .js file to get started.");
         }
         
-        [MenuItem("Assets/Create/Feather/JavaScript Behaviour", false, 80)]
+        [MenuItem("Assets/Create/JavaScript Behaviour", false, 80)]
         public static void CreateJavaScriptFile()
         {
             var path = EditorUtility.SaveFilePanel("Create JavaScript File", 
@@ -80,48 +80,70 @@ namespace Feather.Editor
             }
         }
         
+        private static void CreateJavaScriptFileInSelectedFolder(string defaultName)
+        {
+            // Get the selected folder path or default to Assets
+            string folderPath = GetSelectedFolderPath();
+            
+            // Generate unique filename
+            string fileName = AssetDatabase.GenerateUniqueAssetPath($"{folderPath}/{defaultName}.js");
+            
+            // Extract class name from filename
+            string className = System.IO.Path.GetFileNameWithoutExtension(fileName);
+            
+            // Create the file with template
+            var template = CreateJavaScriptTemplate(className);
+            System.IO.File.WriteAllText(fileName, template);
+            
+            // Refresh and select the new file
+            AssetDatabase.Refresh();
+            var asset = AssetDatabase.LoadAssetAtPath<TextAsset>(fileName);
+            Selection.activeObject = asset;
+            EditorGUIUtility.PingObject(asset);
+            
+            // Start rename mode like Unity does for C# scripts
+            EditorApplication.delayCall += () => {
+                if (asset != null)
+                {
+                    var instanceID = asset.GetInstanceID();
+                    EditorGUIUtility.PingObject(instanceID);
+                    // This triggers the rename mode in the project window
+                    Selection.activeInstanceID = instanceID;
+                }
+            };
+        }
+        
+        private static string GetSelectedFolderPath()
+        {
+            // Check if a folder is selected in the project window
+            foreach (var obj in Selection.GetFiltered<UnityEngine.Object>(SelectionMode.Assets))
+            {
+                var path = AssetDatabase.GetAssetPath(obj);
+                if (System.IO.Directory.Exists(path))
+                {
+                    return path;
+                }
+                else if (System.IO.File.Exists(path))
+                {
+                    return System.IO.Path.GetDirectoryName(path);
+                }
+            }
+            return "Assets"; // Default to Assets folder if nothing is selected
+        }
+        
         private static string CreateJavaScriptTemplate(string className)
         {
-            return $@"// Feather JavaScript Behaviour
-// Drop this file onto a GameObject or use Component > Feather > JavaScript Behaviour
+            return $@"class {className} extends jsBehaviour {{
 
-class {className} extends jsBehaviour {{
-    // Unity object properties (these will show in the inspector)
-    // @Light
-    // myLight;
-    
-    // @Text
-    // statusText;
-    
-    // @Rigidbody
-    // rigidBody;
-    
-    // Unity lifecycle methods
-    Awake() {{
-        Unity.Debug.Log('{className}: Awake called');
-    }}
-
+    // Start is called before the first frame update
     Start() {{
-        Unity.Debug.Log('{className}: Start called');
-        // Initialize your component here
+        
     }}
 
+    // Update is called once per frame
     Update() {{
-        // Update logic goes here
-        // Example: Check for input
-        // if (Unity.Input.GetKeyDown(Unity.KeyCode.Space)) {{
-        //     Unity.Debug.Log('Space key pressed!');
-        // }}
+        
     }}
-
-    OnDestroy() {{
-        Unity.Debug.Log('{className}: Destroyed');
-    }}
-    
-    // Custom methods
-    // ExampleMethod() {{
-    //     Unity.Debug.Log('Custom method called');
-    // }}
 }}";
         }
     }
