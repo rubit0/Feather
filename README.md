@@ -43,9 +43,9 @@ Prefer **class name == file name** (same as C#).
 - **IntelliSense** — auto-generated; regenerate in **Project Settings → Feather**
 - **Hot reload** — script changes recreate the JS engine in Play Mode (editor)
 - **Generator coroutines** — `this.startCoroutine(this.myGenerator())` with `yield null` / seconds
-- **Helpers** — `invoke`, `invokeRepeating`, `startCoroutine`, `Feather.require`, `Feather.findBehaviour(s)`
+- **Helpers** — `invoke`, `invokeRepeating`, `startCoroutine`, `this.wait` / `this.nextFrame`, `Feather.require`, `Feather.findBehaviour(s)`
 - **Player builds** — scripts collected automatically on build
-- **Runtime registration** — load scripts from AssetBundles or a backend (see below)
+- **Runtime registration** — load scripts from AssetBundles, memory, or a URL (see below)
 
 ## Property System
 
@@ -73,25 +73,65 @@ Only `@Public` fields appear in the Inspector.
 const light = Unity.Object.FindObjectOfType(Unity.Light);
 const other = Feather.findBehaviour(Coin);
 const all = Feather.findBehaviours(Coin);
+const inactive = Feather.findBehaviours(Coin, { includeInactive: true });
+const fromGo = Feather.getBehaviour(someGameObject, Coin);
+const inScene = Feather.findBehavioursInScene("DemoScene", Coin);
+```
+
+**Coroutines / yields:**
+
+```javascript
+*fade() {
+  yield this.wait(0.5);
+  yield this.nextFrame();
+  yield Feather.waitUntil(() => this.ready);
+}
+this.startCoroutine(this.fade());
 ```
 
 ## Runtime script loading
 
-Scripts in the project are loaded at startup. For **AssetBundles** or **backend-delivered** source, register before activating prefabs/scenes that use those classes:
+Scripts in the project are loaded at startup. For **AssetBundles** or **backend-delivered** source, register before activating prefabs/scenes that use those classes.
+
+**C#**
 
 ```csharp
-// Single script from downloaded text
 Runtime.Instance.RegisterScript(source, "MyClass");
-
-// From a JavaScript asset (e.g. AssetBundle)
-var js = bundle.LoadAsset<JavaScript>("Content/MyClass.js");
-Runtime.Instance.RegisterScript(js);
-
-// All .js assets in a bundle
+Runtime.Instance.RegisterScript(jsAsset);
 Runtime.Instance.RegisterScriptsFromBundle(bundle);
-
-// Update existing class (rebuilds engine + reloads hosts in play mode)
+Runtime.Instance.LoadBundleFromFile(path); // LoadFromFile + register; returns the open bundle
 Runtime.Instance.RegisterScript(newSource, "MyClass", replace: true);
+```
+
+**JavaScript** (same API on `Feather`)
+
+```javascript
+Feather.registerScript(source, "MyClass");
+Feather.registerScript(jsAsset);
+Feather.registerScriptsFromBundle(bundle);
+Feather.registerScript(newSource, "MyClass", true);
+
+// LoadFromFile + register scripts in one step (bundle stays open for prefabs)
+const bundle = Feather.loadBundleFromFile(path);
+// … Instantiate prefabs from bundle …
+bundle.Unload(false);
+
+// Or from downloaded bytes / URL
+Feather.loadBundleFromMemory(bytes);
+Feather.downloadAndRegister(url, (className, error) => {
+  if (error) console.log(error);
+  else Feather.createBehaviour(go, className);
+});
+
+if (!Feather.isScriptLoaded(MyClass)) {
+  Feather.loadBundleFromFile(path);
+}
+
+Feather.listScripts();           // registered class names
+Feather.getScript(MyClass);      // class ctor
+Feather.unloadScript(MyClass);   // session unload (re-register to restore)
+Feather.reloadAll();             // recreate all JS hosts
+Feather.onSceneLoaded((scene, mode) => { /* … */ });
 ```
 
 Registered scripts persist across engine rebuilds for the session. Prefabs must already reference the `JavaScript` asset (or use hosts wired in the bundle). Inspector bridge fields are baked at edit time — new classes discovered only at runtime need prefabs built with matching bridge data.

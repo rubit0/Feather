@@ -7,10 +7,11 @@ using Jint;
 using Jint.Native;
 using Jint.Native.Object;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Feather
 {
-    public class Runtime : MonoBehaviour
+    public partial class Runtime : MonoBehaviour
     {
         public static Runtime Instance { get; private set; }
         public Engine Engine { get; private set; }
@@ -21,6 +22,8 @@ namespace Feather
         private readonly Dictionary<string, object> _requireCache = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
         /// <summary>Scripts registered at runtime (AssetBundle, backend) — re-applied on engine rebuild.</summary>
         private readonly Dictionary<string, string> _runtimeScripts = new Dictionary<string, string>(StringComparer.Ordinal);
+        /// <summary>Classes excluded by <see cref="UnloadScript"/> for this session (skip on rebuild).</summary>
+        private readonly HashSet<string> _unloadedScripts = new HashSet<string>(StringComparer.Ordinal);
 
         private static readonly Regex JsStackFrameRegex = new Regex(
             @"[:(](?<line>\d+):(?<col>\d+)\)?\s*$",
@@ -41,6 +44,11 @@ namespace Feather
 
         private void OnDestroy()
         {
+            if (_sceneLoadedHooked)
+            {
+                SceneManager.sceneLoaded -= OnUnitySceneLoaded;
+                _sceneLoadedHooked = false;
+            }
             if (Instance == this)
                 Instance = null;
         }
@@ -58,7 +66,8 @@ namespace Feather
             _requireCache.Clear();
 
             Engine = UnityApiSurface.CreateEngine();
-            RegisterRequire();
+            ClearJsSessionCallbacks();
+            RegisterFeatherApi();
 
 #if UNITY_EDITOR
             // Project Assets are source of truth in Editor. Loading Resources first
@@ -104,6 +113,7 @@ namespace Feather
             }
 
             var className = meta.Class.Name;
+            _unloadedScripts.Remove(className);
             if (LoadedScripts.ContainsKey(className) && !replace)
                 return null;
 
@@ -158,6 +168,29 @@ namespace Feather
             }
 
             return count;
+        }
+
+        /// <summary>
+        /// <see cref="AssetBundle.LoadFromFile(string)"/> then <see cref="RegisterScriptsFromBundle"/>.
+        /// Returns the loaded bundle (still open for prefabs), or null if the path failed.
+        /// </summary>
+        public AssetBundle LoadBundleFromFile(string path, bool replace = false)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                Debug.LogError("[Feather] LoadBundleFromFile: path is empty.");
+                return null;
+            }
+
+            var bundle = AssetBundle.LoadFromFile(path);
+            if (bundle == null)
+            {
+                Debug.LogError($"[Feather] LoadBundleFromFile: failed to load '{path}'.");
+                return null;
+            }
+
+            RegisterScriptsFromBundle(bundle, replace);
+            return bundle;
         }
 
         private void LoadRuntimeRegisteredScripts()
@@ -262,69 +295,6 @@ namespace Feather
             }
             return false;
         }
-
-        private void RegisterRequire()
-        {
-            Engine.SetValue("Feather", new
-            {
-                require = new Func<string, object>(RequireScript),
-                findBehaviour = new Func<JsValue, object>(FindJsBehaviour),
-                findBehaviours = new Func<JsValue, object>(FindJsBehaviours),
-            });
-            Engine.Execute("function require(path) { return Feather.require(path); }");
-        }
-
-        /// <summary>First active JS instance whose class name matches (string or class ctor).</summary>
-        private static object FindJsBehaviour(JsValue classNameOrType)
-        {
-            var className = ResolveJsClassName(classNameOrType);
-            if (string.IsNullOrEmpty(className)) return null;
-            foreach (var host in UnityEngine.Object.FindObjectsByType<JavaScriptBehaviour>())
-            {
-                if (host == null || !MatchesJsClass(host, className)) continue;
-                host.EnsureJsInstance();
-                if (host.JsInstance != null)
-                    return host.JsInstance;
-            }
-            return null;
-        }
-
-        /// <summary>All active JS instances whose class name matches (string or class ctor).</summary>
-        private static object FindJsBehaviours(JsValue classNameOrType)
-        {
-            var className = ResolveJsClassName(classNameOrType);
-            if (string.IsNullOrEmpty(className))
-                return Array.Empty<object>();
-
-            var list = new List<object>();
-            foreach (var host in UnityEngine.Object.FindObjectsByType<JavaScriptBehaviour>())
-            {
-                if (host == null || !MatchesJsClass(host, className)) continue;
-                host.EnsureJsInstance();
-                if (host.JsInstance != null)
-                    list.Add(host.JsInstance);
-            }
-            return list.ToArray();
-        }
-
-        private static string ResolveJsClassName(JsValue arg)
-        {
-            if (arg.IsNull() || arg.IsUndefined()) return null;
-            if (arg.IsString()) return arg.AsString();
-            if (arg.IsObject())
-            {
-                var name = arg.AsObject().Get("name");
-                if (name.IsString())
-                {
-                    var s = name.AsString();
-                    if (!string.IsNullOrEmpty(s)) return s;
-                }
-            }
-            return null;
-        }
-
-        private static bool MatchesJsClass(JavaScriptBehaviour host, string className) =>
-            host != null && host.MatchesJsClass(className);
 
         private object RequireScript(string path)
         {
@@ -457,6 +427,12 @@ namespace Feather
                     return null;
 
                 var className = scriptMeta.Class.Name;
+                if (_unloadedScripts.Contains(className))
+                {
+                    FeatherSettings.LogScriptLoad($"Skip unloaded class {className} from {assetName}");
+                    return null;
+                }
+
 #if UNITY_EDITOR
                 var fileName = assetName.Contains('.') ? assetName.Split('.')[0] : assetName;
                 if (!string.Equals(className, fileName, StringComparison.Ordinal))

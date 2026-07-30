@@ -58,6 +58,14 @@ namespace Feather
         [Tooltip("Used when JavaScript Editor is Custom — path to editor binary or .app")]
         public string customJavaScriptEditorPath = "";
 
+        /// <summary>Cached fingerprint of Unity/API surface used to skip regenerating JS defs.</summary>
+        [HideInInspector]
+        public string jsApiStamp = "";
+
+        /// <summary>Cached fingerprint of project Component types used to skip regenerating Project.d.ts.</summary>
+        [HideInInspector]
+        public string projectDefinitionsStamp = "";
+
         public static bool VerboseLogging => Instance != null && Instance.verboseLogging;
         public static bool LogScriptLoading => Instance != null && Instance.logScriptLoading;
         public static bool LogComponentAddition => Instance != null && Instance.logComponentAddition;

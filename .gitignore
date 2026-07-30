@@ -60,3 +60,4 @@ ProjectSettings/RiderScriptEditorPersistedState.asset
 ProjectSettings/SceneTemplateSettings.json
 *.ts
 *.ts
+jsconfig.json

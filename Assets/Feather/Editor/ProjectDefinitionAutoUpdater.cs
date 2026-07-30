@@ -21,12 +21,13 @@ namespace Feather.Editor
         private static int _retryFrames;
         private static CancellationTokenSource _cts;
         private static readonly ConcurrentQueue<string> _mainThreadLogs = new ConcurrentQueue<string>();
+        private static readonly ConcurrentQueue<Action> _mainThreadActions = new ConcurrentQueue<Action>();
 
         static ProjectDefinitionAutoUpdater()
         {
             AssemblyReloadEvents.afterAssemblyReload += ScheduleUpdate;
             CompilationPipeline.compilationFinished += _ => ScheduleUpdate();
-            EditorApplication.update += PumpMainThreadLogs;
+            EditorApplication.update += PumpMainThreadWork;
         }
 
         private static void ScheduleUpdate()
@@ -71,7 +72,17 @@ namespace Feather.Editor
             string text;
             try
             {
+                TypeScriptDefinitionGenerator.MigrateLegacyStampFiles();
                 fingerprint = TypeScriptDefinitionGenerator.ComputeProjectDefinitionsFingerprint();
+                if (string.Equals(
+                        TypeScriptDefinitionGenerator.GetStoredProjectDefinitionsFingerprint(),
+                        fingerprint,
+                        StringComparison.Ordinal))
+                {
+                    Interlocked.Exchange(ref _writeInFlight, 0);
+                    return;
+                }
+
                 text = TypeScriptDefinitionGenerator.BuildProjectDefinitionsText(fingerprint);
             }
             catch (Exception ex)
@@ -82,7 +93,6 @@ namespace Feather.Editor
             }
 
             var defsPath = TypeScriptDefinitionGenerator.ProjectDefinitionsPath;
-            var stampPath = TypeScriptDefinitionGenerator.ProjectDefinitionsFingerprintPath;
 
             _cts?.Cancel();
             _cts?.Dispose();
@@ -93,7 +103,12 @@ namespace Feather.Editor
             {
                 try
                 {
-                    var wrote = WriteIfChanged(defsPath, stampPath, fingerprint, text, token);
+                    var wrote = WriteDefsIfChanged(defsPath, text, token);
+                    EnqueueAction(() =>
+                    {
+                        TypeScriptDefinitionGenerator.StoreProjectDefinitionsFingerprint(fingerprint);
+                        AssetDatabase.SaveAssets();
+                    });
                     if (wrote)
                         EnqueueLog("[Feather] Project.d.ts updated in background (project types changed).", warning: false);
                 }
@@ -121,8 +136,20 @@ namespace Feather.Editor
             _mainThreadLogs.Enqueue(message);
         }
 
-        private static void PumpMainThreadLogs()
+        private static void EnqueueAction(Action action)
         {
+            if (action != null)
+                _mainThreadActions.Enqueue(action);
+        }
+
+        private static void PumpMainThreadWork()
+        {
+            while (_mainThreadActions.TryDequeue(out var action))
+            {
+                try { action(); }
+                catch (Exception ex) { Debug.LogWarning($"[Feather] {ex.Message}"); }
+            }
+
             while (_mainThreadLogs.TryDequeue(out var message))
             {
                 if (message.Contains("failed") || message.Contains("skipped"))
@@ -133,34 +160,19 @@ namespace Feather.Editor
         }
 
         /// <returns>True when the definitions file was written.</returns>
-        private static bool WriteIfChanged(
-            string defsPath,
-            string stampPath,
-            string fingerprint,
-            string text,
-            CancellationToken token)
+        private static bool WriteDefsIfChanged(string defsPath, string text, CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
 
-            if (File.Exists(stampPath))
-            {
-                var existing = File.ReadAllText(stampPath).Trim();
-                if (string.Equals(existing, fingerprint, StringComparison.Ordinal))
-                    return false;
-            }
-            else if (File.Exists(defsPath))
+            if (File.Exists(defsPath))
             {
                 var existingText = File.ReadAllText(defsPath);
                 if (BodiesEqual(existingText, text))
-                {
-                    File.WriteAllText(stampPath, fingerprint);
                     return false;
-                }
             }
 
             token.ThrowIfCancellationRequested();
             File.WriteAllText(defsPath, text);
-            File.WriteAllText(stampPath, fingerprint);
             return true;
         }
 

@@ -11,7 +11,8 @@ namespace Feather.Editor
 {
     public static class TypeScriptDefinitionGenerator
     {
-        private const string StampFile = "FeatherApiStamp.txt";
+        private const string LegacyApiStampFile = "FeatherApiStamp.txt";
+        private const string LegacyProjectDefsStampFile = "FeatherProjectDefsStamp.txt";
 
         /// <summary>
         /// Full JS project setup: Feather.d.ts, Unity*.d.ts, Project.d.ts, jsconfig, link.xml, settings.
@@ -23,6 +24,8 @@ namespace Feather.Editor
             {
                 EditorUtility.DisplayProgressBar("Feather", "Generating JS project…", 0.1f);
                 var projectRoot = ProjectRoot();
+                FeatherSettings.GetOrCreateSettings();
+                MigrateLegacyStampFiles();
 
                 EditorUtility.DisplayProgressBar("Feather", "Writing Feather.d.ts…", 0.2f);
                 WriteFeatherDefinitions(projectRoot);
@@ -35,10 +38,10 @@ namespace Feather.Editor
 
                 EditorUtility.DisplayProgressBar("Feather", "Writing jsconfig + link.xml…", 0.85f);
                 WriteJSConfig(projectRoot);
-                WriteStamp(projectRoot);
+                WriteApiStamp();
                 LinkXmlGenerator.Generate();
-                FeatherSettings.GetOrCreateSettings();
 
+                AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
 
                 if (quiet)
@@ -70,21 +73,72 @@ namespace Feather.Editor
 
         public static bool StampMatches()
         {
-            var path = Path.Combine(ProjectRoot(), StampFile);
-            if (!File.Exists(path)) return false;
-            return File.ReadAllText(path).Trim() == UnityApiSurface.GetStamp();
+            MigrateLegacyStampFiles();
+            var settings = FeatherSettings.Instance ?? FeatherSettings.GetOrCreateSettings();
+            if (settings == null) return false;
+            return string.Equals(
+                (settings.jsApiStamp ?? string.Empty).Trim(),
+                UnityApiSurface.GetStamp(),
+                StringComparison.Ordinal);
         }
 
         private static string ProjectRoot() => Directory.GetParent(Application.dataPath).FullName;
 
         public static string ProjectDefinitionsPath => Path.Combine(ProjectRoot(), "Project.d.ts");
 
-        public static string ProjectDefinitionsFingerprintPath =>
-            Path.Combine(ProjectRoot(), "FeatherProjectDefsStamp.txt");
-
-        private static void WriteStamp(string root)
+        public static string GetStoredProjectDefinitionsFingerprint()
         {
-            File.WriteAllText(Path.Combine(root, StampFile), UnityApiSurface.GetStamp());
+            MigrateLegacyStampFiles();
+            var settings = FeatherSettings.Instance ?? FeatherSettings.GetOrCreateSettings();
+            return settings != null ? (settings.projectDefinitionsStamp ?? string.Empty).Trim() : string.Empty;
+        }
+
+        public static void StoreProjectDefinitionsFingerprint(string fingerprint)
+        {
+            var settings = FeatherSettings.GetOrCreateSettings();
+            settings.projectDefinitionsStamp = fingerprint ?? string.Empty;
+            EditorUtility.SetDirty(settings);
+        }
+
+        private static void WriteApiStamp()
+        {
+            var settings = FeatherSettings.GetOrCreateSettings();
+            settings.jsApiStamp = UnityApiSurface.GetStamp();
+            EditorUtility.SetDirty(settings);
+        }
+
+        /// <summary>One-time: fold root stamp files into FeatherSettings, then delete them.</summary>
+        public static void MigrateLegacyStampFiles()
+        {
+            var root = ProjectRoot();
+            var settings = FeatherSettings.Instance ?? FeatherSettings.GetOrCreateSettings();
+            if (settings == null) return;
+
+            var dirty = false;
+            var apiPath = Path.Combine(root, LegacyApiStampFile);
+            if (File.Exists(apiPath))
+            {
+                if (string.IsNullOrEmpty(settings.jsApiStamp))
+                {
+                    settings.jsApiStamp = File.ReadAllText(apiPath).Trim();
+                    dirty = true;
+                }
+                File.Delete(apiPath);
+            }
+
+            var projectPath = Path.Combine(root, LegacyProjectDefsStampFile);
+            if (File.Exists(projectPath))
+            {
+                if (string.IsNullOrEmpty(settings.projectDefinitionsStamp))
+                {
+                    settings.projectDefinitionsStamp = File.ReadAllText(projectPath).Trim();
+                    dirty = true;
+                }
+                File.Delete(projectPath);
+            }
+
+            if (dirty)
+                EditorUtility.SetDirty(settings);
         }
 
         private static void WriteJSConfig(string root)
@@ -132,6 +186,8 @@ namespace Feather.Editor
             sb.AppendLine("declare class jsBehaviour {");
             sb.AppendLine("    gameObject: Unity.GameObject;");
             sb.AppendLine("    transform: Unity.Transform;");
+            sb.AppendLine("    /** Mirrors MonoBehaviour.enabled on the host. */");
+            sb.AppendLine("    enabled: boolean;");
             sb.AppendLine("    invoke(callback: Function, delay?: number): void;");
             sb.AppendLine("    invokeRepeating(callback: Function, delay: number, interval: number): void;");
             sb.AppendLine("    /** Cancel timers started with invoke / invokeRepeating (not startCoroutine). */");
@@ -143,6 +199,10 @@ namespace Feather.Editor
             sb.AppendLine("    startCoroutine(generatorOrFn: Function | Iterator<any>, intervalSeconds?: number): any;");
             sb.AppendLine("    stopCoroutine(handle: any): void;");
             sb.AppendLine("    stopAllCoroutines(): void;");
+            sb.AppendLine("    /** Yield helper: WaitForSeconds (use inside a generator coroutine). */");
+            sb.AppendLine("    wait(seconds: number): any;");
+            sb.AppendLine("    /** Yield helper: wait one frame (same as `yield null`). */");
+            sb.AppendLine("    nextFrame(): any;");
             sb.AppendLine();
             sb.AppendLine("    Awake?(): void;");
             sb.AppendLine("    Start?(): void;");
@@ -221,10 +281,33 @@ namespace Feather.Editor
             sb.AppendLine("declare function require(path: string): any;");
             sb.AppendLine("declare const Feather: {");
             sb.AppendLine("    require(path: string): any;");
-            sb.AppendLine("    /** First active JS instance — pass class name string or the class ctor. */");
-            sb.AppendLine("    findBehaviour(className: string | Function): any;");
-            sb.AppendLine("    /** All active JS instances — pass class name string or the class ctor. */");
-            sb.AppendLine("    findBehaviours(className: string | Function): any[];");
+            sb.AppendLine("    /** First matching JS instance. Options: `{ includeInactive?: boolean }`. */");
+            sb.AppendLine("    findBehaviour(className: string | Function, options?: { includeInactive?: boolean }): any;");
+            sb.AppendLine("    /** All matching JS instances. Options: `{ includeInactive?: boolean }`. */");
+            sb.AppendLine("    findBehaviours(className: string | Function, options?: { includeInactive?: boolean }): any[];");
+            sb.AppendLine("    /** JS instances in a loaded scene (Scene, or scene name string). */");
+            sb.AppendLine("    findBehavioursInScene(scene: any | string, className?: string | Function, options?: { includeInactive?: boolean }): any[];");
+            sb.AppendLine("    /** Unity GameObject/Component/JavaScriptBehaviour → JS instance. */");
+            sb.AppendLine("    getBehaviour(unityObject: any, className?: string | Function): any;");
+            sb.AppendLine("    /** Add a JavaScriptBehaviour host and return its JS instance. */");
+            sb.AppendLine("    createBehaviour(gameObject: Unity.GameObject, scriptOrClass: any | string | Function): any;");
+            sb.AppendLine("    listScripts(): string[];");
+            sb.AppendLine("    getScript(className: string | Function): any;");
+            sb.AppendLine("    isScriptLoaded(className: string | Function): boolean;");
+            sb.AppendLine("    registerScript(source: string, assetName?: string, replace?: boolean): string | null;");
+            sb.AppendLine("    registerScript(script: any, replace?: boolean): string | null;");
+            sb.AppendLine("    registerScriptsFromBundle(bundle: any, replace?: boolean): number;");
+            sb.AppendLine("    loadBundleFromFile(path: string, replace?: boolean): any;");
+            sb.AppendLine("    loadBundleFromMemory(bytes: any, replace?: boolean): any;");
+            sb.AppendLine("    /** Downloads text then registerScript. Callback: (className|null, error|null) => void */");
+            sb.AppendLine("    downloadAndRegister(url: string, callback?: (className: string | null, error: string | null) => void, replace?: boolean): void;");
+            sb.AppendLine("    unloadScript(className: string | Function): boolean;");
+            sb.AppendLine("    reloadAll(): void;");
+            sb.AppendLine("    onSceneLoaded(callback: (scene: any, mode: any) => void): void;");
+            sb.AppendLine("    waitForSeconds(seconds: number): any;");
+            sb.AppendLine("    waitForEndOfFrame(): any;");
+            sb.AppendLine("    waitUntil(predicate: () => boolean): any;");
+            sb.AppendLine("    waitWhile(predicate: () => boolean): any;");
             sb.AppendLine("};");
             sb.AppendLine();
             sb.AppendLine("// Host MonoBehaviour for all JS scripts (not a per-script C# type)");
@@ -395,7 +478,7 @@ namespace Feather.Editor
             var fingerprint = ComputeProjectDefinitionsFingerprint();
             var text = BuildProjectDefinitionsText(fingerprint);
             File.WriteAllText(Path.Combine(root, "Project.d.ts"), text);
-            File.WriteAllText(Path.Combine(root, "FeatherProjectDefsStamp.txt"), fingerprint);
+            StoreProjectDefinitionsFingerprint(fingerprint);
         }
 
         /// <summary>

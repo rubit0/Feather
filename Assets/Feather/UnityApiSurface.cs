@@ -40,6 +40,7 @@ namespace Feather
             TryAddAssemblyByName(list, "Assembly-CSharp");
             TryAddTypeAssembly(list, "UnityEngine.AI.NavMeshAgent, UnityEngine.AIModule");
             TryAddTypeAssembly(list, "UnityEngine.Video.VideoPlayer, UnityEngine.VideoModule");
+            TryAddTypeAssembly(list, "UnityEngine.AssetBundle, UnityEngine.AssetBundleModule");
             return list.Distinct().ToArray();
         }
 
@@ -104,12 +105,15 @@ namespace Feather
             engine.Execute(@"class jsBehaviour {
                 gameObject;
                 transform;
+                enabled;
                 invoke;
                 invokeRepeating;
                 cancelInvoke;
                 startCoroutine;
                 stopCoroutine;
                 stopAllCoroutines;
+                wait;
+                nextFrame;
             }");
 
             RegisterOperatorAliases(engine);

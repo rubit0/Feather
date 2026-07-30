@@ -4,6 +4,7 @@
   <assembly fullname="Assembly-CSharp" preserve="all" />
   <assembly fullname="UnityEngine.AIModule" preserve="all" />
   <assembly fullname="UnityEngine.AnimationModule" preserve="all" />
+  <assembly fullname="UnityEngine.AssetBundleModule" preserve="all" />
   <assembly fullname="UnityEngine.AudioModule" preserve="all" />
   <assembly fullname="UnityEngine.CoreModule" preserve="all" />
   <assembly fullname="UnityEngine.InputLegacyModule" preserve="all" />

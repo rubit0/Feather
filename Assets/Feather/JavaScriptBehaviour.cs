@@ -7,6 +7,8 @@ using Jint;
 using Jint.Native;
 using Jint.Native.Function;
 using Jint.Native.Object;
+using Jint.Runtime.Descriptors;
+using Jint.Runtime.Interop;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -202,7 +204,21 @@ namespace Feather
                 }
 
                 var className = ResolveClassName();
-                if (string.IsNullOrEmpty(className) || !Runtime.Instance.LoadedScripts.ContainsKey(className))
+                if (string.IsNullOrEmpty(className))
+                {
+                    Debug.LogError(FormatLog("Could not resolve JavaScript class name."));
+                    return;
+                }
+
+                // AssetBundle / late-loaded scripts: register from the assigned asset on first use
+                if (!Runtime.Instance.LoadedScripts.ContainsKey(className) &&
+                    script != null &&
+                    !string.IsNullOrEmpty(script.text))
+                {
+                    Runtime.Instance.RegisterScript(script);
+                }
+
+                if (!Runtime.Instance.LoadedScripts.ContainsKey(className))
                 {
                     Debug.LogError(FormatLog(
                         $"JavaScript class '{className}' not found. " +
@@ -251,6 +267,24 @@ namespace Feather
             _jsBehaviourInstance.Set("startCoroutine", JsValue.FromObject(engine, new Func<JsValue, JsValue, object>(StartJsCoroutine)));
             _jsBehaviourInstance.Set("stopCoroutine", JsValue.FromObject(engine, new Action<object>(StopJsCoroutine)));
             _jsBehaviourInstance.Set("stopAllCoroutines", JsValue.FromObject(engine, new Action(StopAllGeneratorCoroutines)));
+            _jsBehaviourInstance.Set("wait", JsValue.FromObject(engine, new Func<float, object>(seconds =>
+                seconds > 0f ? (object)new WaitForSeconds(seconds) : null)));
+            _jsBehaviourInstance.Set("nextFrame", JsValue.FromObject(engine, new Func<object>(() => null)));
+
+            // this.enabled ↔ MonoBehaviour.enabled
+            var getter = new ClrFunction(engine, "get enabled",
+                (_, _) => JsValue.FromObject(engine, enabled),
+                0, PropertyFlag.Configurable);
+            var setter = new ClrFunction(engine, "set enabled",
+                (_, args) =>
+                {
+                    if (args != null && args.Length > 0 && args[0].IsBoolean())
+                        enabled = args[0].AsBoolean();
+                    return JsValue.Undefined;
+                },
+                1, PropertyFlag.Configurable);
+            _jsBehaviourInstance.DefineOwnProperty("enabled",
+                new GetSetPropertyDescriptor(getter, setter, enumerable: true, configurable: true));
         }
 
         private void InjectSerializedProperties()
