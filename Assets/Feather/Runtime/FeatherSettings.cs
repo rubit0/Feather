@@ -95,14 +95,26 @@ namespace Feather
             if (settings == null)
             {
                 settings = CreateInstance<FeatherSettings>();
-                var dir = System.IO.Path.GetDirectoryName(AssetPath);
-                if (!System.IO.Directory.Exists(dir))
-                    System.IO.Directory.CreateDirectory(dir);
+                var dir = System.IO.Path.GetDirectoryName(AssetPath)?.Replace('\\', '/');
+                if (!string.IsNullOrEmpty(dir))
+                {
+                    EnsureProjectFolder("Assets/Feather");
+                    EnsureProjectFolder("Assets/Feather/Resources");
+                }
                 UnityEditor.AssetDatabase.CreateAsset(settings, AssetPath);
                 UnityEditor.AssetDatabase.SaveAssets();
             }
             _instance = settings;
             return settings;
+        }
+
+        private static void EnsureProjectFolder(string folder)
+        {
+            if (UnityEditor.AssetDatabase.IsValidFolder(folder)) return;
+            var parent = System.IO.Path.GetDirectoryName(folder)?.Replace('\\', '/');
+            var name = System.IO.Path.GetFileName(folder);
+            if (!string.IsNullOrEmpty(parent) && !string.IsNullOrEmpty(name))
+                UnityEditor.AssetDatabase.CreateFolder(parent, name);
         }
 #endif
     }

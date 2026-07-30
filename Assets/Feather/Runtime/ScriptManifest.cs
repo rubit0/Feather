@@ -5,7 +5,8 @@ namespace Feather
 {
     /// <summary>
     /// Player-build manifest of JavaScript assets. Created/updated automatically by
-    /// <c>ScriptBuildCollector</c> at <c>Assets/Feather/Resources/Feather/ScriptManifest.asset</c>.
+    /// Auto-built by <see cref="Editor.ScriptBuildCollector"/> at
+    /// <c>Assets/Feather/Resources/Feather/ScriptManifest.asset</c> (project-local, not in the UPM package).
     /// </summary>
     public class ScriptManifest : ScriptableObject
     {

@@ -571,8 +571,8 @@ namespace Feather
             if (string.IsNullOrEmpty(className)) return null;
             var includeInactive = ReadIncludeInactive(optionsArg);
             var hosts = includeInactive
-                ? UnityEngine.Object.FindObjectsByType<JavaScriptBehaviour>(FindObjectsInactive.Include, FindObjectsSortMode.None)
-                : UnityEngine.Object.FindObjectsByType<JavaScriptBehaviour>(FindObjectsSortMode.None);
+                ? UnityEngine.Object.FindObjectsByType<JavaScriptBehaviour>(FindObjectsInactive.Include)
+                : UnityEngine.Object.FindObjectsByType<JavaScriptBehaviour>(FindObjectsInactive.Exclude);
             foreach (var host in hosts)
             {
                 if (host == null || !MatchesJsClass(host, className)) continue;
@@ -591,8 +591,8 @@ namespace Feather
 
             var includeInactive = ReadIncludeInactive(optionsArg);
             var hosts = includeInactive
-                ? UnityEngine.Object.FindObjectsByType<JavaScriptBehaviour>(FindObjectsInactive.Include, FindObjectsSortMode.None)
-                : UnityEngine.Object.FindObjectsByType<JavaScriptBehaviour>(FindObjectsSortMode.None);
+                ? UnityEngine.Object.FindObjectsByType<JavaScriptBehaviour>(FindObjectsInactive.Include)
+                : UnityEngine.Object.FindObjectsByType<JavaScriptBehaviour>(FindObjectsInactive.Exclude);
 
             var list = new List<object>();
             foreach (var host in hosts)

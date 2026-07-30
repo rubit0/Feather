@@ -77,6 +77,8 @@ namespace Feather.Editor
 
         private static void EnsureFolders()
         {
+            if (!AssetDatabase.IsValidFolder("Assets/Feather"))
+                AssetDatabase.CreateFolder("Assets", "Feather");
             if (!AssetDatabase.IsValidFolder("Assets/Feather/Resources"))
                 AssetDatabase.CreateFolder("Assets/Feather", "Resources");
             if (!AssetDatabase.IsValidFolder(ResourcesFolder))

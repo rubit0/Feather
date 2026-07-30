@@ -4,7 +4,29 @@
 [![JavaScript](https://img.shields.io/badge/JavaScript-ES6-yellow)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
 [![Jint](https://img.shields.io/badge/Runtime-Jint-green)](https://github.com/sebastienros/jint)
 
-Feather enables **JavaScript scripting in Unity** with IntelliSense, inspector fields like MonoBehaviours, and drag-and-drop `.js` components. No manual setup — drop in the package, create a script, attach it.
+Feather enables **JavaScript scripting in Unity** with IntelliSense, inspector fields like MonoBehaviours, and drag-and-drop `.js` components. No manual setup — add the UPM package, create a script, attach it.
+
+## Install (UPM)
+
+**Git URL** (Window → Package Manager → **+** → **Add package from git URL…**):
+
+```
+https://github.com/rubit0/Feather.git?path=/Assets/Feather
+```
+
+Or in `Packages/manifest.json`:
+
+```json
+{
+  "dependencies": {
+    "com.rubit0.feather": "https://github.com/rubit0/Feather.git?path=/Assets/Feather"
+  }
+}
+```
+
+Optional: pin a tag/branch with `#v1.0.0` or `#main` after the path (e.g. `...?path=/Assets/Feather#main`).
+
+This repository is a Unity project used to develop Feather. The installable package is [`Assets/Feather`](Assets/Feather) (contains `package.json`); it is **not** under `Packages/`. The demo sample is `Assets/Feather/Samples~/Demo` — import it from Package Manager → Feather → Samples.
 
 ## Quick Start
 

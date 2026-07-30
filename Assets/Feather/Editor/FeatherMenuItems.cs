@@ -34,7 +34,7 @@ namespace Feather.Editor
         [MenuItem("Assets/Create/JavaScript Behaviour", false, 1)]
         public static void CreateJavaScriptFileInPlace()
         {
-            const string templatePath = "Assets/Feather/Editor/Templates/JavaScriptBehaviour.js.txt";
+            var templatePath = FeatherPackageUtil.EditorFolder + "/Templates/JavaScriptBehaviour.js.txt";
             ProjectWindowUtil.CreateScriptAssetFromTemplateFile(templatePath, "JavaScriptBehaviour.js");
         }
     }

@@ -1,0 +1,26 @@
+{
+  "name": "com.rubit0.feather",
+  "version": "1.0.0",
+  "displayName": "Feather",
+  "description": "JavaScript scripting for Unity with Jint — inspector fields, IntelliSense, hot reload, and drag-and-drop .js components.",
+  "unity": "6000.0",
+  "documentationUrl": "https://github.com/rubit0/Feather",
+  "keywords": [
+    "javascript",
+    "js",
+    "scripting",
+    "jint",
+    "behaviour"
+  ],
+  "author": {
+    "name": "rubit0",
+    "url": "https://github.com/rubit0"
+  },
+  "samples": [
+    {
+      "displayName": "Demo Scene",
+      "description": "Coin-collect FPS demo (FirstPersonController, GameManager, UI).",
+      "path": "Samples~/Demo"
+    }
+  ]
+}

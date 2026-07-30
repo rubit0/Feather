@@ -38,6 +38,9 @@ namespace Feather
             TryAddTypeAssembly(list, "UnityEngine.UI.Button, UnityEngine.UI");
             TryAddTypeAssembly(list, "UnityEngine.UI.Text, UnityEngine.UI");
             TryAddAssemblyByName(list, "Assembly-CSharp");
+            var featherAsm = typeof(JavaScriptBehaviour).Assembly;
+            if (featherAsm != null && !list.Contains(featherAsm))
+                list.Add(featherAsm);
             TryAddTypeAssembly(list, "UnityEngine.AI.NavMeshAgent, UnityEngine.AIModule");
             TryAddTypeAssembly(list, "UnityEngine.Video.VideoPlayer, UnityEngine.VideoModule");
             TryAddTypeAssembly(list, "UnityEngine.AssetBundle, UnityEngine.AssetBundleModule");
@@ -83,7 +86,7 @@ namespace Feather
             cfg.Interop.AllowSystemReflection = allowReflection;
             // GetComponent/etc. declare Component/Object — wrap by runtime type so Move, etc. resolve
             cfg.Interop.WrapObjectHandler = (engine, target, _) =>
-                target == null ? null : new ObjectWrapper(engine, target, target.GetType());
+                target == null ? null : ObjectWrapper.Create(engine, target, target.GetType());
             cfg.AllowClr(GetAssemblies());
         }
 

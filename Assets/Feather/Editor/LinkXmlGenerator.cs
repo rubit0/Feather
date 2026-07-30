@@ -26,9 +26,14 @@ namespace Feather.Editor
             {
                 sb.AppendLine($"  <assembly fullname=\"{name}\" preserve=\"all\" />");
             }
-            // Feather runtime + plugins
+            // Feather runtime + consumer scripts
+            sb.AppendLine("  <assembly fullname=\"Feather\" preserve=\"all\" />");
             sb.AppendLine("  <assembly fullname=\"Assembly-CSharp\" preserve=\"all\" />");
             sb.AppendLine("</linker>");
+
+            var dir = Path.GetDirectoryName(OutputPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
 
             File.WriteAllText(OutputPath, sb.ToString());
             AssetDatabase.Refresh();

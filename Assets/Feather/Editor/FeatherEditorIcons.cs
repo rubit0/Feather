@@ -5,7 +5,8 @@ namespace Feather.Editor
 {
     internal static class FeatherEditorIcons
     {
-        private const string JsScriptIconPath = "Assets/Feather/Editor/Icons/js Script Icon.png";
+        private static string JsScriptIconPath =>
+            FeatherPackageUtil.EditorFolder + "/Icons/Js Script Icon.png";
 
         private static Texture2D _source;
         private static Texture2D _uncompressed;
