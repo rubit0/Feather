@@ -1,180 +1,135 @@
 # Feather - JavaScript Scripting for Unity
 
-[![Unity](https://img.shields.io/badge/Unity-2021.3%2B-blue)](https://unity3d.com)
+[![Unity](https://img.shields.io/badge/Unity-6000.5%2B-blue)](https://unity3d.com)
 [![JavaScript](https://img.shields.io/badge/JavaScript-ES6-yellow)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
 [![Jint](https://img.shields.io/badge/Runtime-Jint-green)](https://github.com/sebastienros/jint)
 
-Feather enables **JavaScript scripting in Unity** with full IntelliSense support, native inspector integration, and MonoBehaviour-like functionality. Write Unity scripts in JavaScript instead of C# while maintaining all the power and features of Unity development.
+Feather enables **JavaScript scripting in Unity** with IntelliSense, inspector fields like MonoBehaviours, and drag-and-drop `.js` components. No manual setup — drop in the package, create a script, attach it.
 
-## ✨ Key Features
+## Quick Start
 
-- 🎯 **Direct JavaScript Files**: Drop `.js` files onto GameObjects like native MonoBehaviours
-- 🔧 **Native Inspector**: Properties show up exactly like C# MonoBehaviour properties
-- 💡 **Full IntelliSense**: Complete Unity API auto-completion in your IDE
-- 🔄 **Hot Reload**: Script changes reflect immediately in Play Mode
-- 📋 **Property Decorators**: `@Light`, `@Button`, `@List(Component)` for clean property injection
-- 🎮 **UnityEvent Support**: Full event system integration with inspector callbacks
-- 🚀 **IL2CPP Compatible**: Works on mobile platforms (Android/iOS)
-- 📦 **AssetBundle Ready**: Deploy scripts dynamically for live updates
+1. **Assets → Create → JavaScript Behaviour**
+2. Drag the `.js` onto a GameObject (or **Component → Feather → Add JavaScript…**)
+3. Press Play
 
-## 🚀 Quick Start
-
-### 1. Create a JavaScript Script
+`RuntimeStarter` creates a persistent `FeatherRuntime` before the first scene loads. IntelliSense (`jsconfig.json`, `Unity*.d.ts`, `Feather.d.ts`) is generated automatically on first load.
 
 ```javascript
 class HelloWorld extends jsBehaviour {
-    @GameObject
-    targetObject;
-    
-    Awake() {
-        Unity.Debug.Log('Hello World from JavaScript!');
-    }
-    
+    @Public
+    targetObject = GameObject;
+
+    @Public
+    speed = 5.0;
+
     Start() {
-        Unity.Debug.Log('Feather JavaScript is working!');
-        
-        if (this.targetObject) {
-            Unity.Debug.Log(`Found target: ${this.targetObject.name}`);
-        }
+        Unity.Debug.Log('Hello from JavaScript!');
     }
-    
+
     Update() {
-        // Press Space to say hello
         if (Unity.Input.GetKeyDown(Unity.KeyCode.Space)) {
-            Unity.Debug.Log('Hello from Update method!');
-            
-            if (this.targetObject) {
-                this.targetObject.name = 'Hello JavaScript!';
-            }
+            Unity.Debug.Log(`speed=${this.speed}`);
         }
     }
 }
 ```
 
-### 2. Add to GameObject
+Prefer **class name == file name** (same as C#).
 
-Simply **drag the `.js` file** onto any GameObject in the hierarchy, and:
-- ✅ ScriptBehaviour component is automatically added
-- ✅ Properties are auto-detected and appear in inspector
-- ✅ IntelliSense works in your IDE
-- ✅ Ready to assign Unity objects and play!
+## Key Features
 
-## 📖 Documentation
+- **Direct `.js` components** — drag onto GameObjects like scripts
+- **Inspector fields** — `@Public` + typed markers (`= MeshRenderer`, `= Coin`, `List(GameObject)`)
+- **IntelliSense** — auto-generated; regenerate in **Project Settings → Feather**
+- **Hot reload** — script changes recreate the JS engine in Play Mode (editor)
+- **Generator coroutines** — `this.startCoroutine(this.myGenerator())` with `yield null` / seconds
+- **Helpers** — `invoke`, `invokeRepeating`, `startCoroutine`, `Feather.require`, `Feather.findBehaviour(s)`
+- **Player builds** — scripts collected automatically on build
+- **Runtime registration** — load scripts from AssetBundles or a backend (see below)
 
-- **[Direct JavaScript Guide](./DirectJS_Guide.md)** - Complete guide to drag & drop JavaScript scripting
-- **[IntelliSense Setup](./IntelliSense_Guide.md)** - Set up full Unity API auto-completion in your IDE
-- **[API Reference](./Assets/Feather/Editor/Generated/)** - Generated TypeScript definitions for Unity APIs
+## Property System
 
-## 🎯 Property System
-
-### Supported Decorators
+Only `@Public` fields appear in the Inspector.
 
 ```javascript
-// Unity Components
-@GameObject        // GameObject reference
-@Transform         // Transform component
-@Rigidbody         // Rigidbody component
-@Light             // Light component
-@Camera            // Camera component
-@AudioSource       // AudioSource component
-
-// UI Components
-@Text              // UI Text component
-@Button            // UI Button component
-@Image             // UI Image component
-@Slider            // UI Slider component
-@Toggle            // UI Toggle component
-
-// Physics
-@Collider          // Any Collider component
-@BoxCollider       // BoxCollider specifically
-@SphereCollider    // SphereCollider specifically
-@CapsuleCollider   // CapsuleCollider specifically
-@MeshCollider      // MeshCollider specifically
-
-// Events
-@UnityEvent        // Unity event system
-
-// Arrays/Lists
-@List(Component)   // Arrays of any supported component type
-@List(GameObject)  // Arrays of GameObjects
-@List(UnityEvent)  // Arrays of UnityEvents
+@Public @Header("Refs") @Required targetObject = GameObject;
+@Public @Assets texture = Texture2D;
+@Public @Scene follow = Transform;
+@Public @Range(0, 20) speed = 5.0;
+@Public tint = Color;
+@Public offset = Vector3;
+@Public enemies = List(GameObject);
+@Public otherScript = Coin;           // JS class ref → peer JS instance at runtime
+@Public onDone = UnityEvent;
 ```
 
-### Inspector Integration
+**JS behaviour refs:** `@Public other = Coin` — Inspector slot filtered to that class; runtime injects the peer JS instance.
 
-All properties appear in the Unity Inspector with:
-- ✅ **Correct component types** (Button field shows Button components only)
-- ✅ **Native drag & drop** (same UX as C# MonoBehaviours)
-- ✅ **List/Array support** with size controls and reorderable elements
-- ✅ **UnityEvent callbacks** with method selection dropdowns
-- ✅ **Auto-detection** when scripts change
+**Operators:** JS has no C# overloads — use `Color.multiply(a, b)`, `Vector3.add(a, b)`, etc.
 
-## 🛠️ Architecture
+**Finding objects:**
 
-### Core Components
+```javascript
+const light = Unity.Object.FindObjectOfType(Unity.Light);
+const other = Feather.findBehaviour(Coin);
+const all = Feather.findBehaviours(Coin);
+```
 
-- **`Runtime.cs`**: Jint JavaScript engine manager with hot-reload support
-- **`ScriptBehaviour.cs`**: MonoBehaviour host that executes JavaScript classes
-- **`Analyzer.cs`**: JavaScript parser for property and method detection
-- **`ScriptBehaviourEditor.cs`**: Custom inspector with native MonoBehaviour UI
-- **`ImportHandler.cs`**: Asset import pipeline for `.js`/`.jsu`/`.jsfeather` files
+## Runtime script loading
 
-### JavaScript Engine
+Scripts in the project are loaded at startup. For **AssetBundles** or **backend-delivered** source, register before activating prefabs/scenes that use those classes:
 
-- **Runtime**: [Jint .NET JavaScript Engine](https://github.com/sebastienros/jint)
-- **JavaScript Version**: ES6 (classes, arrow functions, destructuring, etc.)
-- **Unity API**: Available through `Unity.*` namespace
-- **Performance**: Compiled JavaScript with direct .NET object binding
+```csharp
+// Single script from downloaded text
+Runtime.Instance.RegisterScript(source, "MyClass");
 
-## 🔧 Installation
+// From a JavaScript asset (e.g. AssetBundle)
+var js = bundle.LoadAsset<JavaScript>("Content/MyClass.js");
+Runtime.Instance.RegisterScript(js);
 
-1. **Import Feather** into your Unity project
-2. **Initialize Runtime**: 
-   - Add `Feather Runtime` to your scene, or
-   - Use menu `GameObject > Feather > Create Runtime Manager`
-3. **Generate IntelliSense**: 
-   - Menu `Feather > Generate TypeScript Definitions`
-   - Configure your IDE to recognize `.js` files
+// All .js assets in a bundle
+Runtime.Instance.RegisterScriptsFromBundle(bundle);
 
-## 📋 Requirements
+// Update existing class (rebuilds engine + reloads hosts in play mode)
+Runtime.Instance.RegisterScript(newSource, "MyClass", replace: true);
+```
 
-- **Unity**: 2021.3 or later
-- **IL2CPP Compatible**: Works on all Unity platforms
-- **IDE Support**: Any editor with TypeScript/JavaScript support (VS Code recommended)
+Registered scripts persist across engine rebuilds for the session. Prefabs must already reference the `JavaScript` asset (or use hosts wired in the bundle). Inspector bridge fields are baked at edit time — new classes discovered only at runtime need prefabs built with matching bridge data.
 
-## 🎯 Use Cases
+## Settings
 
-### ✅ Perfect For
-- **Rapid Prototyping**: Faster iteration than C# compilation
-- **Dynamic Content**: Scripts that can be updated via AssetBundles
-- **Team Workflows**: Designers/scripters familiar with JavaScript
-- **Live Updates**: Hot-reload development without stopping play mode
-- **Cross-Platform**: Same scripts work on all Unity-supported platforms
+**Edit → Project Settings → Feather**
 
-### ⚠️ Consider C# For
-- **Performance-Critical Code**: Jint has overhead compared to native C#
-- **Complex Math Operations**: Vector math intensive applications
-- **Large Codebases**: C# provides better tooling for massive projects
+| Control | Purpose |
+|---------|---------|
+| **Generate / Update JS Project** | Refresh `Unity*.d.ts`, `Feather.d.ts`, `Project.d.ts`, `jsconfig.json`, `link.xml` |
+| **Open .js files with** | Auto / Cursor / VS Code / Unity default / custom |
+| **API Packages** | Opt into UPM packages for JS types / AllowClr |
+| **Allow System.Reflection** | Off by default |
+| Logging | Verbose / script load / component add |
 
-## 🤝 Contributing
+## Architecture
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+| Piece | Role |
+|-------|------|
+| `JavaScriptBehaviour` | MonoBehaviour host + serialized bridge fields |
+| `Runtime` | Jint engine, script load, require, hot reload, `RegisterScript` |
+| `UnityApiSurface` | Shared AllowClr assemblies (runtime + `.d.ts` + link.xml) |
+| `Analyzer` | Esprima parse of class fields/methods |
+| `JavaScriptImporter` | `.js` → `JavaScript` asset |
 
-## 📄 License
+## Requirements
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+- Unity 6 (project targets 6000.5)
+- IDE with TypeScript/JavaScript support (Cursor / VS Code recommended)
 
-## 🙏 Acknowledgments
+## Honest limits
 
-- **[Jint](https://github.com/sebastienros/jint)** - JavaScript engine for .NET
-- **Unity Technologies** - For the amazing Unity engine
-- **Community** - For feedback and contributions
+- Jint has overhead vs native C#; avoid heavy per-frame math in JS when possible
+- Generics / `ref` / `out` / extension methods are weak via CLR interop
+- Remote JS is arbitrary code — trust/sign your update channel
+- Optional packages (Input System, Cinemachine, URP) via **API Packages** in settings
 
----
+## License
 
-**Get started today!** Create a `.js` file, drag it onto a GameObject, and experience the power of JavaScript in Unity! 🚀
+MIT — see [LICENSE](LICENSE)

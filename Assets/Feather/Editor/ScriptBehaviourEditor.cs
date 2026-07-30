@@ -1,11 +1,10 @@
-using UnityEditor;
-using UnityEditorInternal;
-using UnityEngine;
-using UnityEngine.UI;
-using UnityEngine.Events;
-using System.Linq;
 using System.Collections.Generic;
+using System.Linq;
 using Feather.Analysis;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.Events;
+using UnityEngine.UI;
 
 namespace Feather.Editor
 {
@@ -13,181 +12,435 @@ namespace Feather.Editor
     public class JavaScriptBehaviourEditor : UnityEditor.Editor
     {
         private ScriptMeta _cachedScriptMeta;
-        
+        private string _cachedHash;
+        private string _analyzeError;
+        private bool _nameMismatch;
+
         public override void OnInspectorGUI()
         {
-            var scriptBehaviour = (JavaScriptBehaviour)target;
-            
-            // Draw script field exactly like MonoBehaviour
-            EditorGUI.BeginChangeCheck();
-            var newScript = EditorGUILayout.ObjectField("Script", scriptBehaviour.script, typeof(TextAsset), false) as TextAsset;
-            
-            if (EditorGUI.EndChangeCheck() && newScript != scriptBehaviour.script)
+            var behaviour = (JavaScriptBehaviour)target;
+
+            using (new EditorGUI.DisabledScope(true))
             {
-                // Validate that it's a JavaScript file
-                if (newScript != null && !IsJavaScriptFile(newScript))
-                {
-                    EditorUtility.DisplayDialog("Invalid File Type", 
-                        "Please select a JavaScript file (.js, .jsu, or .jsfeather)", "OK");
-                    return;
-                }
-                
-                Undo.RecordObject(scriptBehaviour, "Change JavaScript File");
-                scriptBehaviour.script = newScript;
-                
-                if (newScript != null)
-                {
-                    AutoDetectAndCreateProperties(scriptBehaviour, newScript);
-                }
+                EditorGUILayout.ObjectField("Script", behaviour.script, typeof(JavaScript), false);
             }
-            
-            // If no script is assigned, show message and stop
-            if (scriptBehaviour.script == null)
+
+            if (behaviour.script == null)
             {
-                EditorGUILayout.HelpBox("No JavaScript file assigned", MessageType.Warning);
+                EditorGUILayout.HelpBox("No JavaScript file assigned. Drag a .js file onto this GameObject, or use Component → Feather → Add JavaScript…", MessageType.Info);
                 return;
             }
-            
-            // Cache script metadata and check for changes
-            var scriptName = scriptBehaviour.script.name.Split('.')[0];
-            var needsUpdate = false;
-            
-            if (_cachedScriptMeta == null || _cachedScriptMeta.Class.Name != scriptName)
+
+            EnsureCache(behaviour);
+
+            if (!string.IsNullOrEmpty(_analyzeError))
             {
-                CacheScriptMetadata(scriptBehaviour);
-                needsUpdate = true;
+                EditorGUILayout.HelpBox(_analyzeError, MessageType.Error);
+                return;
             }
-            else
+
+            if (_nameMismatch)
             {
-                // Check if the script file has been modified
-                var currentScript = Analyzer.ParseScript(scriptBehaviour.script.text);
-                if (Analyzer.IsScriptValid(currentScript))
-                {
-                    var currentMeta = Analyzer.AnalyzeScript(currentScript);
-                    if (HasPropertiesChanged(currentMeta, _cachedScriptMeta))
-                    {
-                        _cachedScriptMeta = currentMeta;
-                        needsUpdate = true;
-                    }
-                }
+                EditorGUILayout.HelpBox(
+                    $"Class name '{_cachedScriptMeta?.Class?.Name}' does not match file name '{behaviour.script.name}'. Prefer matching names (C# convention).",
+                    MessageType.Warning);
             }
-            
-            // Update properties if needed
-            if (needsUpdate && _cachedScriptMeta != null)
+
+            if (_cachedScriptMeta != null && behaviour.properties != null)
             {
-                var decoratedProperties = _cachedScriptMeta.Class.Properties
-                    .Where(p => !string.IsNullOrEmpty(p.Decorator))
-                    .ToList();
-                SyncPropertiesWithScript(scriptBehaviour, decoratedProperties);
+                DrawNativePropertyFields(behaviour);
             }
-            
-            // Draw property fields exactly like MonoBehaviour
-            if (_cachedScriptMeta != null && scriptBehaviour.properties != null)
-            {
-                DrawNativePropertyFields(scriptBehaviour);
-            }
-            
+
             if (GUI.changed)
-            {
                 EditorUtility.SetDirty(target);
-            }
         }
-        
-        private void CacheScriptMetadata(JavaScriptBehaviour scriptBehaviour)
+
+        private void EnsureCache(JavaScriptBehaviour behaviour)
         {
-            try
-            {
-                var script = Analyzer.ParseScript(scriptBehaviour.script.text);
-                if (Analyzer.IsScriptValid(script))
-                {
-                    _cachedScriptMeta = Analyzer.AnalyzeScript(script);
-                }
-            }
-            catch
+            var hash = $"{behaviour.script.GetEntityId()}:{behaviour.script.text.GetHashCode()}";
+            if (_cachedScriptMeta != null && _cachedHash == hash)
+                return;
+
+            _cachedHash = hash;
+            _analyzeError = null;
+            _nameMismatch = false;
+
+            if (!Analyzer.TryAnalyze(behaviour.script.text, out _cachedScriptMeta, out _analyzeError))
             {
                 _cachedScriptMeta = null;
+                return;
+            }
+
+            if (!Analyzer.HasJSBehaviour(_cachedScriptMeta))
+            {
+                _analyzeError = "Class must extend jsBehaviour";
+                return;
+            }
+
+            _nameMismatch = !Analyzer.ClassNameMatchesAsset(_cachedScriptMeta, behaviour.script.name);
+
+            // Sync if properties changed
+            if (HasPropertiesChanged(_cachedScriptMeta, behaviour))
+            {
+                Undo.RecordObject(behaviour, "Sync script properties");
+                ScriptFieldSync.Sync(behaviour, behaviour.script, applyDefaults: true);
             }
         }
-        
-        private void DrawNativePropertyFields(JavaScriptBehaviour scriptBehaviour)
+
+        private static bool HasPropertiesChanged(ScriptMeta meta, JavaScriptBehaviour behaviour)
         {
-            var serializedObject = new SerializedObject(scriptBehaviour);
-            var propertiesProperty = serializedObject.FindProperty("properties");
-            
+            var expected = meta.Class.Properties;
+            var current = behaviour.properties ?? System.Array.Empty<JavaScriptBehaviour.BridgeProperties>();
+            if (expected.Count != current.Length) return true;
+            for (var i = 0; i < expected.Count; i++)
+            {
+                var e = expected[i];
+                var c = current.FirstOrDefault(p => p.name == e.Name);
+                if (c == null) return true;
+                if (c.isList != e.IsArray) return true;
+                if (c.kind != JavaScriptBehaviour.KindFromAnalysis(e)) return true;
+            }
+            return false;
+        }
+
+        private void DrawNativePropertyFields(JavaScriptBehaviour behaviour)
+        {
+            var so = serializedObject;
+            so.Update();
+            var propertiesProperty = so.FindProperty("properties");
             if (propertiesProperty == null || propertiesProperty.arraySize == 0)
                 return;
-                
-            // Draw each property with correct type
-            for (int i = 0; i < propertiesProperty.arraySize; i++)
+
+            for (var i = 0; i < propertiesProperty.arraySize; i++)
             {
-                var propertyElement = propertiesProperty.GetArrayElementAtIndex(i);
-                var nameProperty = propertyElement.FindPropertyRelative("name");
-                var gameObjectProperty = propertyElement.FindPropertyRelative("gameObject");
-                var componentProperty = propertyElement.FindPropertyRelative("component");
-                var unityEventProperty = propertyElement.FindPropertyRelative("unityEvent");
-                
-                var propertyName = nameProperty.stringValue;
-                var decoratorType = GetDecoratorTypeForProperty(propertyName);
-                var isList = GetIsListForProperty(propertyName);
-                var expectedType = GetUnityTypeFromDecorator(decoratorType);
-                
+                var element = propertiesProperty.GetArrayElementAtIndex(i);
+                var name = element.FindPropertyRelative("name").stringValue;
+                var kind = (JavaScriptBehaviour.BridgeKind)element.FindPropertyRelative("kind").enumValueIndex;
+                var isList = element.FindPropertyRelative("isList").boolValue;
+                var meta = GetPropertyMeta(name);
+                var display = MakeDisplayName(name);
+                var label = new GUIContent(display, meta?.Tooltip);
+                var decorator = meta?.Decorator ?? GetDecorator(name);
+
+                if (meta != null)
+                {
+                    if (meta.HasSpace)
+                        EditorGUILayout.Space(meta.SpacePixels);
+                    if (!string.IsNullOrEmpty(meta.Header))
+                        EditorGUILayout.LabelField(meta.Header, EditorStyles.boldLabel);
+                }
+
+                EditorGUI.BeginChangeCheck();
+
                 if (isList)
                 {
-                    // Show as reorderable list (Unity handles this automatically with List<T>)
-                    DrawListPropertyField(propertyElement, propertyName, decoratorType);
-                }
-                else if (decoratorType == "GameObject")
-                {
-                    // Show as GameObject field
-                    EditorGUILayout.PropertyField(gameObjectProperty, new GUIContent(MakeDisplayName(propertyName)));
-                }
-                else if (decoratorType == "UnityEvent")
-                {
-                    // Show as UnityEvent field
-                    EditorGUILayout.PropertyField(unityEventProperty, new GUIContent(MakeDisplayName(propertyName)));
+                    DrawListPropertyField(element, label, decorator, meta);
                 }
                 else
                 {
-                    // Show as specific component type
-                    DrawTypedComponentField(componentProperty, propertyName, expectedType);
+                    switch (kind)
+                    {
+                        case JavaScriptBehaviour.BridgeKind.Float:
+                            DrawFloatField(element, label, meta);
+                            break;
+                        case JavaScriptBehaviour.BridgeKind.Int:
+                            DrawIntField(element, label, meta);
+                            break;
+                        case JavaScriptBehaviour.BridgeKind.Bool:
+                            element.FindPropertyRelative("boolValue").boolValue =
+                                EditorGUILayout.Toggle(label, element.FindPropertyRelative("boolValue").boolValue);
+                            break;
+                        case JavaScriptBehaviour.BridgeKind.String:
+                            DrawStringField(element, label, meta);
+                            break;
+                        case JavaScriptBehaviour.BridgeKind.Vector2:
+                            element.FindPropertyRelative("vector2Value").vector2Value =
+                                EditorGUILayout.Vector2Field(label, element.FindPropertyRelative("vector2Value").vector2Value);
+                            break;
+                        case JavaScriptBehaviour.BridgeKind.Vector3:
+                            element.FindPropertyRelative("vector3Value").vector3Value =
+                                EditorGUILayout.Vector3Field(label, element.FindPropertyRelative("vector3Value").vector3Value);
+                            break;
+                        case JavaScriptBehaviour.BridgeKind.Vector4:
+                            element.FindPropertyRelative("vector4Value").vector4Value =
+                                EditorGUILayout.Vector4Field(label, element.FindPropertyRelative("vector4Value").vector4Value);
+                            break;
+                        case JavaScriptBehaviour.BridgeKind.Color:
+                            DrawColorField(element, label, meta);
+                            break;
+                        case JavaScriptBehaviour.BridgeKind.UnityEvent:
+                            EditorGUILayout.PropertyField(element.FindPropertyRelative("unityEvent"), label);
+                            EditorGUILayout.HelpBox(
+                                "To call a JS method: add this JavaScriptBehaviour, choose CallJsMethod (string), and pass the method name — or use InvokeJs0–3 mapped to OnJsEvent/OnJsEvent1–3.",
+                                MessageType.None);
+                            break;
+                        default:
+                            DrawUnityObjectField(element, label, decorator, meta);
+                            break;
+                    }
+                }
+
+                if (EditorGUI.EndChangeCheck())
+                {
+                    element.FindPropertyRelative("hasSerializedValue").boolValue = true;
+                }
+
+                if (meta is { Required: true } && IsRequiredMissing(element, kind, isList, decorator))
+                {
+                    EditorGUILayout.HelpBox($"{display} is required.", MessageType.Warning);
                 }
             }
-            
-            serializedObject.ApplyModifiedProperties();
+
+            so.ApplyModifiedProperties();
         }
-        
-        private void DrawTypedComponentField(SerializedProperty componentProperty, string propertyName, System.Type expectedType)
+
+        private void DrawFloatField(SerializedProperty element, GUIContent label, Analysis.Property meta)
         {
-            var displayName = MakeDisplayName(propertyName);
-            var currentComponent = componentProperty.objectReferenceValue as Component;
-            
-            EditorGUI.BeginChangeCheck();
-            var newComponent = EditorGUILayout.ObjectField(displayName, currentComponent, expectedType, true) as Component;
-            
-            if (EditorGUI.EndChangeCheck())
+            var prop = element.FindPropertyRelative("floatValue");
+            var value = prop.floatValue;
+            if (meta is { HasRange: true })
+                value = EditorGUILayout.Slider(label, value, meta.RangeMin, meta.RangeMax);
+            else
+                value = EditorGUILayout.FloatField(label, value);
+            prop.floatValue = ClampFloat(value, meta);
+        }
+
+        private void DrawIntField(SerializedProperty element, GUIContent label, Analysis.Property meta)
+        {
+            var prop = element.FindPropertyRelative("intValue");
+            var value = prop.intValue;
+            if (meta is { LayerField: true })
+                value = EditorGUILayout.LayerField(label, value);
+            else if (meta is { HasRange: true })
+                value = EditorGUILayout.IntSlider(label, value, Mathf.RoundToInt(meta.RangeMin), Mathf.RoundToInt(meta.RangeMax));
+            else
+                value = EditorGUILayout.IntField(label, value);
+            prop.intValue = ClampInt(value, meta);
+        }
+
+        private void DrawStringField(SerializedProperty element, GUIContent label, Analysis.Property meta)
+        {
+            var prop = element.FindPropertyRelative("stringValue");
+            if (meta is { TagField: true })
             {
-                componentProperty.objectReferenceValue = newComponent;
+                prop.stringValue = EditorGUILayout.TagField(label, prop.stringValue);
+                return;
+            }
+
+            if (meta is { TextArea: true })
+            {
+                EditorGUILayout.PrefixLabel(label);
+                prop.stringValue = EditorGUILayout.TextArea(prop.stringValue, GUILayout.MinHeight(60));
+                return;
+            }
+
+            if (meta is { Multiline: true })
+            {
+                var lines = Mathf.Max(2, meta.MultilineLines);
+                EditorGUILayout.PrefixLabel(label);
+                prop.stringValue = EditorGUILayout.TextArea(prop.stringValue, GUILayout.MinHeight(EditorGUIUtility.singleLineHeight * lines));
+                return;
+            }
+
+            prop.stringValue = EditorGUILayout.TextField(label, prop.stringValue);
+        }
+
+        private void DrawColorField(SerializedProperty element, GUIContent label, Analysis.Property meta)
+        {
+            var prop = element.FindPropertyRelative("colorValue");
+            if (meta is { HasColorUsage: true })
+                prop.colorValue = EditorGUILayout.ColorField(label, prop.colorValue, true, meta.ColorUsageShowAlpha, meta.ColorUsageHdr);
+            else
+                prop.colorValue = EditorGUILayout.ColorField(label, prop.colorValue);
+        }
+
+        private void DrawUnityObjectField(SerializedProperty element, GUIContent label, string decorator, Analysis.Property meta)
+        {
+            var allowScene = meta == null || !meta.AssetsOnly;
+            if (decorator == "GameObject")
+            {
+                var goProp = element.FindPropertyRelative("gameObject");
+                var next = EditorGUILayout.ObjectField(label, goProp.objectReferenceValue, typeof(GameObject), allowScene);
+                if (meta is { SceneObjectsOnly: true } && next != null && EditorUtility.IsPersistent(next))
+                    next = null;
+                goProp.objectReferenceValue = next;
+                return;
+            }
+
+            if (decorator == "JavaScriptBehaviour" || !string.IsNullOrEmpty(meta?.JsBehaviourClass))
+            {
+                DrawJsBehaviourField(element, label, meta, allowScene);
+                return;
+            }
+
+            var expectedType = GetUnityTypeFromDecorator(decorator) ?? typeof(Component);
+            if (typeof(Component).IsAssignableFrom(expectedType))
+            {
+                var compProp = element.FindPropertyRelative("component");
+                var current = compProp.objectReferenceValue as Component;
+                var next = EditorGUILayout.ObjectField(label, current, expectedType, allowScene) as Component;
+                if (meta is { SceneObjectsOnly: true } && next != null && EditorUtility.IsPersistent(next))
+                    next = null;
+                compProp.objectReferenceValue = next;
+            }
+            else
+            {
+                var objProp = element.FindPropertyRelative("gameObject");
+                // Non-component assets are project assets; Scene-only does not apply meaningfully
+                var assetAllowScene = meta is { SceneObjectsOnly: true };
+                var next = EditorGUILayout.ObjectField(label, objProp.objectReferenceValue, expectedType, assetAllowScene);
+                if (meta is { AssetsOnly: true } && next != null && !EditorUtility.IsPersistent(next))
+                    next = null;
+                objProp.objectReferenceValue = next;
             }
         }
-        
-        private string MakeDisplayName(string propertyName)
+
+        private static void DrawJsBehaviourField(
+            SerializedProperty element, GUIContent label, Analysis.Property meta, bool allowScene)
         {
-            // Convert camelCase to Title Case
-            if (string.IsNullOrEmpty(propertyName))
-                return propertyName;
-                
-            var result = System.Text.RegularExpressions.Regex.Replace(
-                propertyName, 
-                @"(\B[A-Z])", 
-                " $1");
-            
+            var classFilter = meta?.JsBehaviourClass;
+            var fieldLabel = string.IsNullOrEmpty(classFilter)
+                ? label
+                : new GUIContent(label.text, string.IsNullOrEmpty(label.tooltip)
+                    ? $"JavaScriptBehaviour ({classFilter})"
+                    : label.tooltip);
+
+            var compProp = element.FindPropertyRelative("component");
+            var current = compProp.objectReferenceValue as JavaScriptBehaviour;
+            var next = EditorGUILayout.ObjectField(fieldLabel, current, typeof(JavaScriptBehaviour), allowScene)
+                as JavaScriptBehaviour;
+
+            if (meta is { SceneObjectsOnly: true } && next != null && EditorUtility.IsPersistent(next))
+                next = null;
+
+            if (next != null && !string.IsNullOrEmpty(classFilter) && !next.MatchesJsClass(classFilter))
+            {
+                Debug.LogWarning(
+                    $"[Feather] '{label.text}' expects JS class '{classFilter}', " +
+                    $"got '{next.JsClassName ?? next.name}'. Assignment cleared.");
+                next = null;
+            }
+
+            compProp.objectReferenceValue = next;
+        }
+
+        private void DrawListPropertyField(SerializedProperty propertyElement, GUIContent label, string decoratorType, Analysis.Property meta)
+        {
+            var expectedType = GetUnityTypeFromDecorator(decoratorType) ?? typeof(UnityEngine.Object);
+            var allowScene = meta == null || !meta.AssetsOnly;
+            SerializedProperty listProperty;
+            if (decoratorType == "GameObject")
+                listProperty = propertyElement.FindPropertyRelative("gameObjectList");
+            else if (decoratorType == "UnityEvent")
+                listProperty = propertyElement.FindPropertyRelative("unityEventList");
+            else if (!typeof(Component).IsAssignableFrom(expectedType))
+                listProperty = propertyElement.FindPropertyRelative("gameObjectList");
+            else
+                listProperty = propertyElement.FindPropertyRelative("componentList");
+
+            listProperty.isExpanded = EditorGUILayout.Foldout(listProperty.isExpanded, label, true);
+            if (!listProperty.isExpanded) return;
+
+            EditorGUI.indentLevel++;
+            var newSize = EditorGUILayout.IntField("Size", listProperty.arraySize);
+            if (newSize != listProperty.arraySize)
+                listProperty.arraySize = newSize;
+
+            for (var j = 0; j < listProperty.arraySize; j++)
+            {
+                var element = listProperty.GetArrayElementAtIndex(j);
+                if (decoratorType == "UnityEvent")
+                {
+                    EditorGUILayout.PropertyField(element, new GUIContent($"Element {j}"));
+                }
+                else
+                {
+                    var next = EditorGUILayout.ObjectField(
+                        $"Element {j}", element.objectReferenceValue, expectedType, allowScene);
+                    if (meta is { SceneObjectsOnly: true } && next != null && EditorUtility.IsPersistent(next))
+                        next = null;
+                    if (meta is { AssetsOnly: true } && next != null && !EditorUtility.IsPersistent(next))
+                        next = null;
+                    element.objectReferenceValue = next;
+                }
+            }
+            EditorGUI.indentLevel--;
+        }
+
+        private static float ClampFloat(float value, Analysis.Property meta)
+        {
+            if (meta == null) return value;
+            if (meta.HasMin) value = Mathf.Max(meta.MinValue, value);
+            if (meta.HasMax) value = Mathf.Min(meta.MaxValue, value);
+            return value;
+        }
+
+        private static int ClampInt(int value, Analysis.Property meta)
+        {
+            if (meta == null) return value;
+            if (meta.HasMin) value = Mathf.Max(Mathf.RoundToInt(meta.MinValue), value);
+            if (meta.HasMax) value = Mathf.Min(Mathf.RoundToInt(meta.MaxValue), value);
+            return value;
+        }
+
+        private static bool IsRequiredMissing(SerializedProperty element, JavaScriptBehaviour.BridgeKind kind, bool isList, string decorator)
+        {
+            if (isList)
+            {
+                // Required on lists: at least one assigned element
+                var list = decorator == "GameObject" || !IsComponentDecorator(decorator)
+                    ? element.FindPropertyRelative("gameObjectList")
+                    : element.FindPropertyRelative("componentList");
+                if (decorator == "UnityEvent")
+                    list = element.FindPropertyRelative("unityEventList");
+                if (list == null || list.arraySize == 0) return true;
+                for (var i = 0; i < list.arraySize; i++)
+                {
+                    if (list.GetArrayElementAtIndex(i).objectReferenceValue != null)
+                        return false;
+                }
+                return true;
+            }
+
+            if (kind != JavaScriptBehaviour.BridgeKind.UnityObject)
+                return false;
+
+            if (decorator == "GameObject")
+                return element.FindPropertyRelative("gameObject").objectReferenceValue == null;
+
+            var expected = GetUnityTypeFromDecorator(decorator);
+            if (expected != null && typeof(Component).IsAssignableFrom(expected))
+                return element.FindPropertyRelative("component").objectReferenceValue == null;
+            return element.FindPropertyRelative("gameObject").objectReferenceValue == null;
+        }
+
+        private static bool IsComponentDecorator(string decorator)
+        {
+            var t = GetUnityTypeFromDecorator(decorator);
+            return t != null && typeof(Component).IsAssignableFrom(t);
+        }
+
+        private Analysis.Property GetPropertyMeta(string propertyName)
+        {
+            return _cachedScriptMeta?.Class?.Properties?.FirstOrDefault(p => p.Name == propertyName);
+        }
+
+        private string GetDecorator(string propertyName)
+        {
+            var prop = GetPropertyMeta(propertyName);
+            return prop?.Decorator ?? "Component";
+        }
+
+        private static string MakeDisplayName(string propertyName)
+        {
+            if (string.IsNullOrEmpty(propertyName)) return propertyName;
+            var result = System.Text.RegularExpressions.Regex.Replace(propertyName, @"(\B[A-Z])", " $1");
             return char.ToUpper(result[0]) + result.Substring(1);
         }
-        
-        private System.Type GetUnityTypeFromDecorator(string decorator)
+
+        private static System.Type GetUnityTypeFromDecorator(string decorator)
         {
-            // First check built-in Unity types
-            var builtInType = decorator switch
+            var builtIn = decorator switch
             {
                 "GameObject" => typeof(GameObject),
                 "Transform" => typeof(Transform),
@@ -195,6 +448,7 @@ namespace Feather.Editor
                 "Light" => typeof(Light),
                 "Camera" => typeof(Camera),
                 "AudioSource" => typeof(AudioSource),
+                "AudioClip" => typeof(AudioClip),
                 "Text" => typeof(Text),
                 "Button" => typeof(Button),
                 "Image" => typeof(Image),
@@ -208,237 +462,34 @@ namespace Feather.Editor
                 "CapsuleCollider" => typeof(CapsuleCollider),
                 "MeshCollider" => typeof(MeshCollider),
                 "UnityEvent" => typeof(UnityEvent),
+                "JavaScriptBehaviour" => typeof(JavaScriptBehaviour),
+                "Texture2D" => typeof(Texture2D),
+                "Texture" => typeof(Texture),
+                "Material" => typeof(Material),
+                "Mesh" => typeof(Mesh),
+                "Sprite" => typeof(Sprite),
                 _ => null
             };
-            
-            if (builtInType != null)
-                return builtInType;
-            
-            // Try to find custom MonoBehaviour types by name
+            if (builtIn != null) return builtIn;
+
             try
             {
-                // Search through all loaded assemblies for the type
                 foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
                 {
                     var type = assembly.GetType(decorator);
-                    if (type != null && typeof(Component).IsAssignableFrom(type))
-                    {
+                    if (type != null && typeof(UnityEngine.Object).IsAssignableFrom(type))
                         return type;
-                    }
-                    
-                    // Also try to find by simple name (without namespace)
-                    var types = assembly.GetTypes().Where(t => 
-                        t.Name == decorator && 
-                        typeof(Component).IsAssignableFrom(t)).ToArray();
-                    
-                    if (types.Length > 0)
-                    {
-                        return types[0]; // Return first match
-                    }
+                    var types = assembly.GetTypes().Where(t =>
+                        t.Name == decorator && typeof(UnityEngine.Object).IsAssignableFrom(t)).ToArray();
+                    if (types.Length > 0) return types[0];
                 }
             }
             catch (System.Exception ex)
             {
-                // If reflection fails, log warning but continue
-                Debug.LogWarning($"Could not resolve custom component type '{decorator}': {ex.Message}");
+                Debug.LogWarning($"[Feather] Could not resolve type '{decorator}': {ex.Message}");
             }
-            
-            // Default to generic Component if no specific type found
-            return typeof(Component);
-        }
-        
-        private bool IsJavaScriptFile(TextAsset textAsset)
-        {
-            if (textAsset == null) return false;
-            
-            var assetPath = AssetDatabase.GetAssetPath(textAsset);
-            return assetPath.EndsWith(".js") || assetPath.EndsWith(".jsu") || assetPath.EndsWith(".jsfeather");
-        }
-        
-        private void AutoDetectAndCreateProperties(JavaScriptBehaviour scriptBehaviour, TextAsset scriptAsset)
-        {
-            try
-            {
-                var script = Analyzer.ParseScript(scriptAsset.text);
-                if (!Analyzer.IsScriptValid(script))
-                {
-                    EditorUtility.DisplayDialog("Invalid Script", 
-                        "The JavaScript file does not contain a valid class.", "OK");
-                    return;
-                }
-                
-                var scriptMeta = Analyzer.AnalyzeScript(script);
-                if (!Analyzer.HasJSBehaviour(scriptMeta))
-                {
-                    EditorUtility.DisplayDialog("Invalid Script", 
-                        "The JavaScript class must extend 'jsBehaviour'.", "OK");
-                    return;
-                }
-                
-                _cachedScriptMeta = scriptMeta;
-                
-                // Auto-create property bindings for decorated properties
-                var decoratedProperties = scriptMeta.Class.Properties
-                    .Where(p => !string.IsNullOrEmpty(p.Decorator))
-                    .ToList();
-                    
-                SyncPropertiesWithScript(scriptBehaviour, decoratedProperties);
-            }
-            catch (System.Exception ex)
-            {
-                Debug.LogWarning($"Could not auto-analyze script {scriptAsset.name}: {ex.Message}");
-            }
-        }
-        
-        private void SyncPropertiesWithScript(JavaScriptBehaviour scriptBehaviour, System.Collections.Generic.List<Property> decoratedProperties)
-        {
-            Undo.RecordObject(scriptBehaviour, "Sync script properties");
-            
-            var existingProperties = scriptBehaviour.properties?.ToList() ?? new System.Collections.Generic.List<JavaScriptBehaviour.BridgeProperties>();
-            var updatedProperties = new System.Collections.Generic.List<JavaScriptBehaviour.BridgeProperties>();
-            
-            // Add or update properties from script
-            foreach (var prop in decoratedProperties)
-            {
-                var existing = existingProperties.FirstOrDefault(ep => ep.name == prop.Name);
-                if (existing != null)
-                {
-                    // Update existing property (in case list status changed)
-                    existing.isList = prop.IsArray;
-                    if (prop.IsArray && existing.gameObjectList == null && existing.componentList == null && existing.unityEventList == null)
-                    {
-                        existing.gameObjectList = new System.Collections.Generic.List<UnityEngine.Object>();
-                        existing.componentList = new System.Collections.Generic.List<Component>();
-                        existing.unityEventList = new System.Collections.Generic.List<UnityEvent>();
-                    }
-                    updatedProperties.Add(existing);
-                }
-                else
-                {
-                    // Create new property
-                    updatedProperties.Add(new JavaScriptBehaviour.BridgeProperties
-                    {
-                        name = prop.Name,
-                        isList = prop.IsArray,
-                        gameObject = null,
-                        component = null,
-                        unityEvent = null,
-                        gameObjectList = prop.IsArray ? new System.Collections.Generic.List<UnityEngine.Object>() : null,
-                        componentList = prop.IsArray ? new System.Collections.Generic.List<Component>() : null,
-                        unityEventList = prop.IsArray ? new System.Collections.Generic.List<UnityEvent>() : null
-                    });
-                }
-            }
-            
-            scriptBehaviour.properties = updatedProperties.ToArray();
-            EditorUtility.SetDirty(scriptBehaviour);
-        }
-        
-        private void DrawListPropertyField(SerializedProperty propertyElement, string propertyName, string decoratorType)
-        {
-            var displayName = MakeDisplayName(propertyName);
-            var expectedType = GetUnityTypeFromDecorator(decoratorType);
-            
-            // Always use the same interface for consistency
-            SerializedProperty listProperty;
-            if (decoratorType == "GameObject")
-            {
-                listProperty = propertyElement.FindPropertyRelative("gameObjectList");
-            }
-            else if (decoratorType == "UnityEvent")
-            {
-                listProperty = propertyElement.FindPropertyRelative("unityEventList");
-            }
-            else
-            {
-                listProperty = propertyElement.FindPropertyRelative("componentList");
-            }
-            
-            // Consistent list drawing for all types
-            EditorGUILayout.BeginVertical();
-            
-            // List header with size control
-            EditorGUILayout.BeginHorizontal();
-            listProperty.isExpanded = EditorGUILayout.Foldout(listProperty.isExpanded, displayName, true);
-            EditorGUILayout.EndHorizontal();
-            
-            if (listProperty.isExpanded)
-            {
-                EditorGUI.indentLevel++;
-                
-                // Size field
-                var newSize = EditorGUILayout.IntField("Size", listProperty.arraySize);
-                if (newSize != listProperty.arraySize)
-                {
-                    listProperty.arraySize = newSize;
-                }
-                
-                // Draw each element with proper type validation
-                for (int j = 0; j < listProperty.arraySize; j++)
-                {
-                    var element = listProperty.GetArrayElementAtIndex(j);
-                    var currentObject = element.objectReferenceValue;
-                    
-                    EditorGUI.BeginChangeCheck();
-                    var newObject = EditorGUILayout.ObjectField(
-                        $"Element {j}", 
-                        currentObject, 
-                        expectedType, 
-                        true);
-                    
-                    if (EditorGUI.EndChangeCheck())
-                    {
-                        element.objectReferenceValue = newObject;
-                    }
-                }
-                
-                EditorGUI.indentLevel--;
-            }
-            
-            EditorGUILayout.EndVertical();
-        }
-        
 
-        
-        private bool GetIsListForProperty(string propertyName)
-        {
-            if (_cachedScriptMeta?.Class.Properties != null)
-            {
-                var prop = _cachedScriptMeta.Class.Properties.FirstOrDefault(p => p.Name == propertyName);
-                return prop?.IsArray ?? false;
-            }
-            return false;
-        }
-        
-        private bool HasPropertiesChanged(ScriptMeta newMeta, ScriptMeta oldMeta)
-        {
-            if (newMeta.Class.Properties.Count != oldMeta.Class.Properties.Count)
-                return true;
-                
-            for (int i = 0; i < newMeta.Class.Properties.Count; i++)
-            {
-                var newProp = newMeta.Class.Properties[i];
-                var oldProp = oldMeta.Class.Properties.FirstOrDefault(p => p.Name == newProp.Name);
-                
-                if (oldProp == null || 
-                    oldProp.Decorator != newProp.Decorator || 
-                    oldProp.IsArray != newProp.IsArray)
-                {
-                    return true;
-                }
-            }
-            
-            return false;
-        }
-        
-        private string GetDecoratorTypeForProperty(string propertyName)
-        {
-            if (_cachedScriptMeta?.Class.Properties != null)
-            {
-                var prop = _cachedScriptMeta.Class.Properties.FirstOrDefault(p => p.Name == propertyName);
-                return prop?.Decorator ?? "Unknown";
-            }
-            return "Unknown";
+            return typeof(Component);
         }
     }
 }

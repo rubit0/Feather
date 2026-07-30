@@ -8,16 +8,19 @@
     "skipLibCheck": true,
     "moduleResolution": "node",
     "experimentalDecorators": true,
-    "noImplicitAny": false,
-    "noImplicitReturns": false,
-    "noImplicitThis": false
+    "noImplicitAny": false
   },
   "include": [
-    "*.d.ts",
-    "*.js",
-    "**/*.js"
+    "Unity.d.ts",
+    "Feather.d.ts",
+    "Project.d.ts",
+    "Package.*.d.ts",
+    "**/*.js",
+    "**/*.jsu",
+    "**/*.jsfeather"
   ],
   "exclude": [
+    "Unity.*.d.ts",
     "node_modules",
     "Library/**/*",
     "Logs/**/*",

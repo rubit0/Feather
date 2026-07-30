@@ -3,34 +3,41 @@ using UnityEngine;
 
 namespace Feather.Editor
 {
+    /// <summary>
+    /// Ensures the JS project (defs / jsconfig / link.xml) exists after Feather is installed
+    /// or when the Unity API stamp goes stale (e.g. Unity upgrade).
+    /// </summary>
     [InitializeOnLoad]
     public static class TypeScriptDefinitionProcessor
     {
+        private const string SessionKey = "Feather.JsProjectAutoSetupAttempted";
+
         static TypeScriptDefinitionProcessor()
         {
-            // Auto-setup development environment on script reload if files don't exist
-            EditorApplication.delayCall += () =>
-            {
-                if (ShouldRegenerateDefinitions())
-                {
-                    // Debug.Log("Setting up Feather JavaScript development environment...");
-                    TypeScriptDefinitionGenerator.GenerateDefinitions();
-                }
-            };
+            EditorApplication.delayCall += TryEnsureJsProject;
         }
-        
-        private static bool ShouldRegenerateDefinitions()
+
+        private static void TryEnsureJsProject()
         {
-            // Project root is one level above Assets folder
-            var projectRoot = System.IO.Directory.GetParent(Application.dataPath).FullName;
-            var unityDefinitionsPath = System.IO.Path.Combine(projectRoot, "Unity.d.ts");
-            var featherDefinitionsPath = System.IO.Path.Combine(projectRoot, "Feather.d.ts");
-            var jsconfigPath = System.IO.Path.Combine(projectRoot, "jsconfig.json");
-            
-            // Check if definitions exist
-            return !System.IO.File.Exists(unityDefinitionsPath) || 
-                   !System.IO.File.Exists(featherDefinitionsPath) ||
-                   !System.IO.File.Exists(jsconfigPath);
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+                return;
+
+            if (EditorApplication.isCompiling)
+            {
+                EditorApplication.delayCall += TryEnsureJsProject;
+                return;
+            }
+
+            if (TypeScriptDefinitionGenerator.JsProjectIsCurrent())
+                return;
+
+            // One auto attempt per editor session — avoids loops if generation fails.
+            if (SessionState.GetBool(SessionKey, false))
+                return;
+            SessionState.SetBool(SessionKey, true);
+
+            Debug.Log("[Feather] JS project missing or outdated — generating automatically…");
+            TypeScriptDefinitionGenerator.GenerateOrUpdateJsProject(quiet: true);
         }
     }
 }

@@ -11,356 +11,139 @@ namespace Feather.Editor
 {
     public static class TypeScriptDefinitionGenerator
     {
-        private const string OUTPUT_PATH = "";
-        private const string UNITY_DEFINITIONS_FILE = "Unity.d.ts";
-        private const string FEATHER_DEFINITIONS_FILE = "Feather.d.ts";
-        private const string JSCONFIG_FILE = "jsconfig.json";
-        
-        // Types to exclude from generation (internal Unity types)
-        private static readonly HashSet<string> ExcludedTypes = new HashSet<string>
-        {
-            "Internal", "Editor", "Networking", "Experimental"
-        };
-        
-        [MenuItem("Feather/Setup JS Dev Environment")]
-        public static void GenerateDefinitions()
+        private const string StampFile = "FeatherApiStamp.txt";
+
+        /// <summary>
+        /// Full JS project setup: Feather.d.ts, Unity*.d.ts, Project.d.ts, jsconfig, link.xml, settings.
+        /// </summary>
+        /// <param name="quiet">Less console noise (used for first-install auto setup).</param>
+        public static void GenerateOrUpdateJsProject(bool quiet = false)
         {
             try
             {
-                EnsureDirectoryExists();
-                
-                var unityDefinitions = GenerateUnityDefinitions();
-                var featherDefinitions = GenerateFeatherDefinitions();
-                
-                WriteDefinitionFile(UNITY_DEFINITIONS_FILE, unityDefinitions);
-                WriteDefinitionFile(FEATHER_DEFINITIONS_FILE, featherDefinitions);
-                
-                var jsConfig = GenerateJSConfig();
-                WriteDefinitionFile(JSCONFIG_FILE, jsConfig);
-                
-                Debug.Log($"JavaScript development environment setup complete! Files generated at project root");
+                EditorUtility.DisplayProgressBar("Feather", "Generating JS project…", 0.1f);
+                var projectRoot = ProjectRoot();
+
+                EditorUtility.DisplayProgressBar("Feather", "Writing Feather.d.ts…", 0.2f);
+                WriteFeatherDefinitions(projectRoot);
+
+                EditorUtility.DisplayProgressBar("Feather", "Writing Unity API definitions…", 0.4f);
+                WriteUnityDefinitions(projectRoot);
+
+                EditorUtility.DisplayProgressBar("Feather", "Writing Project.d.ts…", 0.7f);
+                WriteProjectDefinitions(projectRoot);
+
+                EditorUtility.DisplayProgressBar("Feather", "Writing jsconfig + link.xml…", 0.85f);
+                WriteJSConfig(projectRoot);
+                WriteStamp(projectRoot);
+                LinkXmlGenerator.Generate();
+                FeatherSettings.GetOrCreateSettings();
+
                 AssetDatabase.Refresh();
+
+                if (quiet)
+                    Debug.Log("[Feather] JS project ready (defs + jsconfig + link.xml).");
+                else
+                    Debug.Log("[Feather] JS project generated/updated (defs + jsconfig + link.xml + settings).");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Failed to setup JavaScript development environment: {ex.Message}");
+                Debug.LogError($"[Feather] Failed to generate/update JS project: {ex}");
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
             }
         }
-        
-        private static string GenerateUnityDefinitions()
+
+        /// <summary>True when stamp, jsconfig, and core definition files look present and up to date.</summary>
+        public static bool JsProjectIsCurrent()
+        {
+            var root = ProjectRoot();
+            if (!StampMatches()) return false;
+            if (!File.Exists(Path.Combine(root, "jsconfig.json"))) return false;
+            if (!File.Exists(Path.Combine(root, "Feather.d.ts"))) return false;
+            if (!File.Exists(Path.Combine(root, "Unity.d.ts"))) return false;
+            if (!File.Exists(Path.Combine(root, "Project.d.ts"))) return false;
+            return true;
+        }
+
+        public static bool StampMatches()
+        {
+            var path = Path.Combine(ProjectRoot(), StampFile);
+            if (!File.Exists(path)) return false;
+            return File.ReadAllText(path).Trim() == UnityApiSurface.GetStamp();
+        }
+
+        private static string ProjectRoot() => Directory.GetParent(Application.dataPath).FullName;
+
+        public static string ProjectDefinitionsPath => Path.Combine(ProjectRoot(), "Project.d.ts");
+
+        public static string ProjectDefinitionsFingerprintPath =>
+            Path.Combine(ProjectRoot(), "FeatherProjectDefsStamp.txt");
+
+        private static void WriteStamp(string root)
+        {
+            File.WriteAllText(Path.Combine(root, StampFile), UnityApiSurface.GetStamp());
+        }
+
+        private static void WriteJSConfig(string root)
+        {
+            var json = @"{
+  ""compilerOptions"": {
+    ""target"": ""ES6"",
+    ""lib"": [""ES6""],
+    ""allowJs"": true,
+    ""checkJs"": false,
+    ""noEmit"": true,
+    ""skipLibCheck"": true,
+    ""moduleResolution"": ""node"",
+    ""experimentalDecorators"": true,
+    ""noImplicitAny"": false
+  },
+  ""include"": [
+    ""Unity.d.ts"",
+    ""Feather.d.ts"",
+    ""Project.d.ts"",
+    ""Package.*.d.ts"",
+    ""**/*.js"",
+    ""**/*.jsu"",
+    ""**/*.jsfeather""
+  ],
+  ""exclude"": [
+    ""Unity.*.d.ts"",
+    ""node_modules"",
+    ""Library/**/*"",
+    ""Logs/**/*"",
+    ""Temp/**/*"",
+    ""UserSettings/**/*""
+  ]
+}
+";
+            File.WriteAllText(Path.Combine(root, "jsconfig.json"), json);
+        }
+
+        private static void WriteFeatherDefinitions(string root)
         {
             var sb = new StringBuilder();
-            
-            // Header
-            sb.AppendLine("// Auto-generated Unity TypeScript definitions for Feather");
-            sb.AppendLine("// These are for IntelliSense only - actual code runs as ES6 JavaScript in Jint");
+            sb.AppendLine("// Feather-specific TypeScript definitions (curated)");
             sb.AppendLine("// Generated at: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
             sb.AppendLine();
-            
-            // Get the exact assemblies that Feather exposes
-            var exposedAssemblies = GetExposedAssemblies();
-            var processedTypes = new HashSet<Type>();
-            
-            sb.AppendLine("declare namespace Unity {");
-            
-            foreach (var assembly in exposedAssemblies)
-            {
-                var types = GetExportedUnityTypes(assembly);
-                foreach (var type in types)
-                {
-                    if (ShouldIncludeType(type) && !processedTypes.Contains(type))
-                    {
-                        GenerateTypeDefinition(type, sb, 1, processedTypes);
-                        processedTypes.Add(type);
-                    }
-                }
-            }
-            
-            sb.AppendLine("}");
-            
-            // Generate global Unity namespace import
-            sb.AppendLine();
-            sb.AppendLine("// Global Unity namespace (available via importNamespace('UnityEngine'))");
-            sb.AppendLine("declare var Unity: typeof Unity;");
-            
-            return sb.ToString();
-        }
-        
-        private static Assembly[] GetExposedAssemblies()
-        {
-            // Mirror the exact assemblies that Runtime.cs exposes in cfg.AllowClr()
-            return new[]
-            {
-                typeof(GameObject).Assembly,           // UnityEngine.CoreModule
-                typeof(Rigidbody).Assembly,           // UnityEngine.PhysicsModule  
-                typeof(AudioListener).Assembly,       // UnityEngine.AudioModule
-                typeof(Input).Assembly,               // UnityEngine.InputLegacyModule
-                typeof(Canvas).Assembly               // UnityEngine.UIModule
-            };
-        }
-        
-        private static IEnumerable<Type> GetExportedUnityTypes(Assembly assembly)
-        {
-            try
-            {
-                return assembly.GetExportedTypes()
-                    .Where(t => t.IsPublic && t.Namespace?.StartsWith("UnityEngine") == true)
-                    .OrderBy(t => t.Name);
-            }
-            catch (ReflectionTypeLoadException ex)
-            {
-                return ex.Types.Where(t => t != null);
-            }
-        }
-        
-        private static bool ShouldIncludeType(Type type)
-        {
-            if (type == null || !type.IsPublic) return false;
-            
-            // Exclude internal Unity types
-            if (ExcludedTypes.Any(excluded => type.FullName?.Contains(excluded) == true))
-                return false;
-                
-            // Exclude generic type definitions
-            if (type.IsGenericTypeDefinition) return false;
-            
-            // Include commonly used Unity types
-            return IsCommonUnityType(type);
-        }
-        
-        private static bool IsCommonUnityType(Type type)
-        {
-            var commonTypes = new[]
-            {
-                "GameObject", "Transform", "Component", "MonoBehaviour", "Behaviour",
-                "Rigidbody", "Collider", "Renderer", "MeshRenderer", "Light", "Camera",
-                "AudioSource", "AudioClip", "Input", "Debug", "Time", "Random",
-                "Vector2", "Vector3", "Vector4", "Quaternion", "Color", "Rect",
-                "KeyCode", "Space", "ForceMode", "CollisionDetection",
-                "Canvas", "Text", "Button", "Image", "Slider", "Toggle"
-            };
-            
-            return commonTypes.Contains(type.Name);
-        }
-        
-        private static void GenerateTypeDefinition(Type type, StringBuilder sb, int indent, HashSet<Type> processedTypes)
-        {
-            var indentStr = new string(' ', indent * 4);
-            
-            if (type.IsEnum)
-            {
-                GenerateEnumDefinition(type, sb, indentStr);
-            }
-            else if (type.IsClass || type.IsValueType)
-            {
-                GenerateClassDefinition(type, sb, indentStr);
-            }
-        }
-        
-        private static void GenerateEnumDefinition(Type enumType, StringBuilder sb, string indent)
-        {
-            sb.AppendLine($"{indent}enum {enumType.Name} {{");
-            
-            var enumValues = Enum.GetValues(enumType);
-            var enumNames = Enum.GetNames(enumType);
-            
-            for (int i = 0; i < enumNames.Length; i++)
-            {
-                var value = Convert.ToInt32(enumValues.GetValue(i));
-                sb.AppendLine($"{indent}    {enumNames[i]} = {value},");
-            }
-            
-            sb.AppendLine($"{indent}}}");
-            sb.AppendLine();
-        }
-        
-        private static void GenerateClassDefinition(Type type, StringBuilder sb, string indent)
-        {
-            var isStatic = type.IsSealed && type.IsAbstract;
-            var classKeyword = type.IsValueType ? "interface" : "class";
-            
-            // Class declaration
-            var inheritance = "";
-            if (type.BaseType != null && type.BaseType != typeof(object) && 
-                type.BaseType != typeof(ValueType) && IsCommonUnityType(type.BaseType))
-            {
-                inheritance = $" extends {type.BaseType.Name}";
-            }
-            
-            sb.AppendLine($"{indent}{(isStatic ? "namespace" : classKeyword)} {type.Name}{inheritance} {{");
-            
-            // Generate commonly used properties and methods only
-            GenerateCommonMembers(type, sb, indent + "    ", isStatic);
-            
-            sb.AppendLine($"{indent}}}");
-            sb.AppendLine();
-        }
-        
-        private static void GenerateCommonMembers(Type type, StringBuilder sb, string indent, bool isStatic)
-        {
-            // Get fields (Vector3.x, y, z are fields, not properties!)
-            var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
-                .Where(f => IsCommonMember(f.Name))
-                .Take(15);
-                
-            foreach (var field in fields)
-            {
-                GenerateFieldDefinition(field, sb, indent, isStatic);
-            }
-            
-            // Only include the most commonly used properties to keep definitions clean
-            var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
-                .Where(p => p.GetIndexParameters().Length == 0 && IsCommonMember(p.Name))
-                .Take(15); // Increased limit for math types
-                
-            foreach (var prop in properties)
-            {
-                GeneratePropertyDefinition(prop, sb, indent, isStatic);
-            }
-            
-            var methods = type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
-                .Where(m => !m.IsSpecialName && m.DeclaringType == type && IsCommonMember(m.Name))
-                .GroupBy(m => m.Name)
-                .Select(g => g.First())
-                .Take(15); // Increased limit for math types
-                
-            foreach (var method in methods)
-            {
-                GenerateMethodDefinition(method, sb, indent, isStatic);
-            }
-        }
-        
-        private static bool IsCommonMember(string memberName)
-        {
-            var commonMembers = new[]
-            {
-                // GameObject/Transform
-                "name", "tag", "layer", "active", "transform", "gameObject",
-                "position", "rotation", "localPosition", "localRotation", "localScale",
-                "GetComponent", "AddComponent", "GetComponentInChildren", "GetComponentInParent",
-                "SetActive", "CompareTag", "Translate", "Rotate", "LookAt",
-                
-                // Component/MonoBehaviour
-                "enabled", "isActiveAndEnabled",
-                
-                // Debug
-                "Log", "LogWarning", "LogError",
-                
-                // Input
-                "GetKey", "GetKeyDown", "GetKeyUp", "GetButton", "GetButtonDown", "GetButtonUp",
-                "GetAxis", "GetAxisRaw", "mousePosition",
-                
-                // Time
-                "time", "deltaTime", "fixedDeltaTime", "timeScale",
-                
-                // Physics
-                "velocity", "angularVelocity", "mass", "useGravity", "isKinematic",
-                "AddForce", "AddTorque",
-                
-                // Rendering
-                "material", "materials", "bounds", "enabled",
-                
-                // UI
-                "text", "color", "sprite", "onClick", "onValueChanged", "AddListener",
-                
-                // Vector3 properties and methods
-                "x", "y", "z", "magnitude", "sqrMagnitude", "normalized",
-                "Set", "Scale", "Normalize", "Cross", "Dot", "Lerp", "Slerp", "MoveTowards",
-                "Distance", "Angle", "Project", "ProjectOnPlane", "Reflect",
-                "zero", "one", "up", "down", "left", "right", "forward", "back",
-                
-                // Vector2 properties and methods  
-                "magnitude", "sqrMagnitude", "normalized", "perpendicular",
-                "Set", "Scale", "Normalize", "Dot", "Lerp", "MoveTowards", "Distance", "Angle",
-                "zero", "one", "up", "down", "left", "right",
-                
-                // Quaternion properties and methods
-                "w", "eulerAngles", "identity",
-                "Set", "SetLookRotation", "ToAngleAxis", "FromToRotation", "LookRotation",
-                "Lerp", "Slerp", "RotateTowards", "Inverse", "Angle", "Euler", "AngleAxis",
-                
-                // Color properties and methods
-                "r", "g", "b", "a", "grayscale", "gamma", "linear",
-                "red", "green", "blue", "white", "black", "yellow", "cyan", "magenta", "gray", "clear",
-                "Lerp", "LerpUnclamped", "HSVToRGB", "RGBToHSV",
-                
-                // Rect properties
-                "width", "height", "size", "min", "max", "center",
-                "xMin", "xMax", "yMin", "yMax", "Contains", "Overlaps",
-                
-                // Random methods
-                "Range", "value", "insideUnitSphere", "insideUnitCircle", "onUnitSphere", "rotation", "rotationUniform"
-            };
-            
-            return commonMembers.Contains(memberName);
-        }
-        
-        private static void GeneratePropertyDefinition(PropertyInfo prop, StringBuilder sb, string indent, bool isStatic)
-        {
-            var staticKeyword = isStatic || prop.IsStatic() ? "static " : "";
-            var readOnly = !prop.CanWrite ? "readonly " : "";
-            var typeName = GetTypeScriptTypeName(prop.PropertyType);
-            
-            sb.AppendLine($"{indent}{staticKeyword}{readOnly}{prop.Name}: {typeName};");
-        }
-        
-        private static void GenerateFieldDefinition(FieldInfo field, StringBuilder sb, string indent, bool isStatic)
-        {
-            var staticKeyword = isStatic || field.IsStatic ? "static " : "";
-            var readOnly = field.IsInitOnly ? "readonly " : "";
-            var typeName = GetTypeScriptTypeName(field.FieldType);
-            
-            sb.AppendLine($"{indent}{staticKeyword}{readOnly}{field.Name}: {typeName};");
-        }
-        
-        private static void GenerateMethodDefinition(MethodInfo method, StringBuilder sb, string indent, bool isStatic)
-        {
-            var staticKeyword = isStatic || method.IsStatic ? "static " : "";
-            var parameters = string.Join(", ", method.GetParameters()
-                .Select(p => $"{p.Name}: {GetTypeScriptTypeName(p.ParameterType)}"));
-            var returnType = GetTypeScriptTypeName(method.ReturnType);
-            
-            sb.AppendLine($"{indent}{staticKeyword}{method.Name}({parameters}): {returnType};");
-        }
-        
-        private static string GetTypeScriptTypeName(Type type)
-        {
-            if (type == typeof(void)) return "void";
-            if (type == typeof(bool)) return "boolean";
-            if (type == typeof(string)) return "string";
-            if (type == typeof(int) || type == typeof(float) || type == typeof(double) || 
-                type == typeof(long) || type == typeof(short) || type == typeof(byte)) return "number";
-            
-            if (type.IsArray)
-            {
-                var elementType = GetTypeScriptTypeName(type.GetElementType());
-                return $"{elementType}[]";
-            }
-            
-            // Check if it's a Unity type
-            if (type.Namespace?.StartsWith("UnityEngine") == true)
-            {
-                return $"Unity.{type.Name}";
-            }
-            
-            return "any"; // Fallback for complex types
-        }
-        
-        private static string GenerateFeatherDefinitions()
-        {
-            var sb = new StringBuilder();
-            
-            sb.AppendLine("// Feather-specific TypeScript definitions");
-            sb.AppendLine("// These provide IntelliSense for Feather's JavaScript runtime");
-            sb.AppendLine("// Generated at: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
-            sb.AppendLine();
-            
-            // jsBehaviour base class
             sb.AppendLine("declare class jsBehaviour {");
             sb.AppendLine("    gameObject: Unity.GameObject;");
             sb.AppendLine("    transform: Unity.Transform;");
+            sb.AppendLine("    invoke(callback: Function, delay?: number): void;");
+            sb.AppendLine("    invokeRepeating(callback: Function, delay: number, interval: number): void;");
+            sb.AppendLine("    /** Cancel timers started with invoke / invokeRepeating (not startCoroutine). */");
+            sb.AppendLine("    cancelInvoke(): void;");
+            sb.AppendLine("    /**");
+            sb.AppendLine("     * Drive a JS generator/iterator, or a timer callback when intervalSeconds is set.");
+            sb.AppendLine("     * Yields: null/undefined → next frame; number → seconds; YieldInstruction → as-is.");
+            sb.AppendLine("     */");
+            sb.AppendLine("    startCoroutine(generatorOrFn: Function | Iterator<any>, intervalSeconds?: number): any;");
+            sb.AppendLine("    stopCoroutine(handle: any): void;");
+            sb.AppendLine("    stopAllCoroutines(): void;");
             sb.AppendLine();
-            sb.AppendLine("    // Unity lifecycle methods (all optional)");
             sb.AppendLine("    Awake?(): void;");
             sb.AppendLine("    Start?(): void;");
             sb.AppendLine("    OnEnable?(): void;");
@@ -369,134 +152,478 @@ namespace Feather.Editor
             sb.AppendLine("    LateUpdate?(): void;");
             sb.AppendLine("    FixedUpdate?(): void;");
             sb.AppendLine("    OnDestroy?(): void;");
-            sb.AppendLine();
-            sb.AppendLine("    // Physics 3D methods");
             sb.AppendLine("    OnCollisionEnter?(collision: Unity.Collision): void;");
             sb.AppendLine("    OnCollisionStay?(collision: Unity.Collision): void;");
             sb.AppendLine("    OnCollisionExit?(collision: Unity.Collision): void;");
             sb.AppendLine("    OnTriggerEnter?(other: Unity.Collider): void;");
             sb.AppendLine("    OnTriggerStay?(other: Unity.Collider): void;");
             sb.AppendLine("    OnTriggerExit?(other: Unity.Collider): void;");
-            sb.AppendLine();
-            sb.AppendLine("    // Physics 2D methods");
             sb.AppendLine("    OnCollisionEnter2D?(collision: Unity.Collision2D): void;");
             sb.AppendLine("    OnCollisionStay2D?(collision: Unity.Collision2D): void;");
             sb.AppendLine("    OnCollisionExit2D?(collision: Unity.Collision2D): void;");
             sb.AppendLine("    OnTriggerEnter2D?(other: Unity.Collider2D): void;");
             sb.AppendLine("    OnTriggerStay2D?(other: Unity.Collider2D): void;");
             sb.AppendLine("    OnTriggerExit2D?(other: Unity.Collider2D): void;");
-            sb.AppendLine();
-            sb.AppendLine("    // Rendering methods");
             sb.AppendLine("    OnBecameVisible?(): void;");
             sb.AppendLine("    OnBecameInvisible?(): void;");
             sb.AppendLine("    OnWillRenderObject?(): void;");
             sb.AppendLine("    OnRenderObject?(): void;");
-            sb.AppendLine();
-            sb.AppendLine("    // Application methods");
             sb.AppendLine("    OnApplicationFocus?(hasFocus: boolean): void;");
             sb.AppendLine("    OnApplicationPause?(pauseStatus: boolean): void;");
             sb.AppendLine("    OnApplicationQuit?(): void;");
-            sb.AppendLine();
-            sb.AppendLine("    // GUI & Gizmo methods");
             sb.AppendLine("    OnGUI?(): void;");
             sb.AppendLine("    OnDrawGizmos?(): void;");
             sb.AppendLine("    OnDrawGizmosSelected?(): void;");
-            sb.AppendLine();
-            sb.AppendLine("    // Animation methods");
             sb.AppendLine("    OnAnimatorIK?(layerIndex: number): void;");
             sb.AppendLine("    OnAnimatorMove?(): void;");
+            sb.AppendLine("    OnJsEvent?(): void;");
+            sb.AppendLine("    OnJsEvent1?(): void;");
+            sb.AppendLine("    OnJsEvent2?(): void;");
+            sb.AppendLine("    OnJsEvent3?(): void;");
             sb.AppendLine("}");
             sb.AppendLine();
-            
-            // Decorator declarations for Feather's property injection system
-            sb.AppendLine("// Property decorators for Unity object injection");
-            sb.AppendLine("// Usage: @GameObject light; or @Text myText;");
-            sb.AppendLine("declare var GameObject: PropertyDecorator;");
-            sb.AppendLine("declare var Transform: PropertyDecorator;");
-            sb.AppendLine("declare var Rigidbody: PropertyDecorator;");
-            sb.AppendLine("declare var Light: PropertyDecorator;");
-            sb.AppendLine("declare var Camera: PropertyDecorator;");
-            sb.AppendLine("declare var AudioSource: PropertyDecorator;");
-            sb.AppendLine("declare var Text: PropertyDecorator;");
-            sb.AppendLine("declare var Button: PropertyDecorator;");
-            sb.AppendLine("declare var Image: PropertyDecorator;");
-            sb.AppendLine("declare var Slider: PropertyDecorator;");
-            sb.AppendLine("declare var Toggle: PropertyDecorator;");
-            sb.AppendLine();
-            
-            // Global functions
-            sb.AppendLine("// Global Feather functions");
-            sb.AppendLine("declare function importNamespace(namespace: string): any;");
-            sb.AppendLine();
-            
-            // Generic property decorator type
-            sb.AppendLine("// TypeScript decorator type for property injection");
             sb.AppendLine("type PropertyDecorator = (target: any, propertyKey: string) => void;");
-            
-            return sb.ToString();
-        }
-        
-        private static string GenerateJSConfig()
-        {
-            var sb = new StringBuilder();
-            
-            sb.AppendLine("{");
-            sb.AppendLine("  \"compilerOptions\": {");
-            sb.AppendLine("    \"target\": \"ES6\",");
-            sb.AppendLine("    \"lib\": [\"ES6\"],");
-            sb.AppendLine("    \"allowJs\": true,");
-            sb.AppendLine("    \"checkJs\": false,");
-            sb.AppendLine("    \"noEmit\": true,");
-            sb.AppendLine("    \"skipLibCheck\": true,");
-            sb.AppendLine("    \"moduleResolution\": \"node\",");
-            sb.AppendLine("    \"experimentalDecorators\": true,");
-            sb.AppendLine("    \"noImplicitAny\": false,");
-            sb.AppendLine("    \"noImplicitReturns\": false,");
-            sb.AppendLine("    \"noImplicitThis\": false");
-            sb.AppendLine("  },");
-            sb.AppendLine("  \"include\": [");
-            sb.AppendLine("    \"*.d.ts\",");
-            sb.AppendLine("    \"*.js\",");
-            sb.AppendLine("    \"**/*.js\"");
-            sb.AppendLine("  ],");
-            sb.AppendLine("  \"exclude\": [");
-            sb.AppendLine("    \"node_modules\",");
-            sb.AppendLine("    \"Library/**/*\",");
-            sb.AppendLine("    \"Logs/**/*\",");
-            sb.AppendLine("    \"Temp/**/*\",");
-            sb.AppendLine("    \"UserSettings/**/*\"");
-            sb.AppendLine("  ]");
-            sb.AppendLine("}");
-            
-            return sb.ToString();
-        }
-        
-        private static void EnsureDirectoryExists()
-        {
-            // Project root is one level above Assets folder
-            var projectRoot = Directory.GetParent(Application.dataPath).FullName;
-            var fullPath = Path.Combine(projectRoot, OUTPUT_PATH);
-            if (!Directory.Exists(fullPath))
+            sb.AppendLine();
+            sb.AppendLine("// Opt-in Inspector visibility (lowercase @public is a JS reserved word — use @Public)");
+            sb.AppendLine("declare const Public: PropertyDecorator;");
+            sb.AppendLine();
+            sb.AppendLine("// Inspector metadata (pair with @Public)");
+            sb.AppendLine("declare function Range(min: number, max: number): PropertyDecorator;");
+            sb.AppendLine("declare function Tooltip(text: string): PropertyDecorator;");
+            sb.AppendLine("declare function Header(text: string): PropertyDecorator;");
+            sb.AppendLine("declare function Space(pixels?: number): PropertyDecorator;");
+            sb.AppendLine("declare const TextArea: PropertyDecorator;");
+            sb.AppendLine("declare function Multiline(lines?: number): PropertyDecorator;");
+            sb.AppendLine("declare function Min(value: number): PropertyDecorator;");
+            sb.AppendLine("declare function Max(value: number): PropertyDecorator;");
+            sb.AppendLine("declare const Required: PropertyDecorator;");
+            sb.AppendLine("declare const Scene: PropertyDecorator;");
+            sb.AppendLine("declare const Assets: PropertyDecorator;");
+            sb.AppendLine("declare const Layer: PropertyDecorator;");
+            sb.AppendLine("declare const Tag: PropertyDecorator;");
+            sb.AppendLine("declare function ColorUsage(hdr: boolean, showAlpha?: boolean): PropertyDecorator;");
+            sb.AppendLine();
+            sb.AppendLine("// Value types: `tint = Color` / `offset = Vector3`; also `new Color(1,0,0)`");
+            sb.AppendLine("// C# operators are exposed as Color.multiply / Vector3.add / … (JS has no `*` overload)");
+            foreach (var name in ValueTypeCtorAliases)
+                sb.AppendLine($"declare const {name}: Unity.{name} & typeof Unity.{name};");
+            sb.AppendLine();
+            sb.AppendLine("// Typed ref markers: `field = MeshRenderer` → IntelliSense; pair with @Public for Inspector");
+            sb.AppendLine("// Alias avoids `declare const MeshRenderer: Unity.MeshRenderer` circularity with the class name.");
+            foreach (var (name, unityType) in RefMarkers)
             {
-                Directory.CreateDirectory(fullPath);
+                sb.AppendLine($"type __Feather_{name} = {unityType};");
+                sb.AppendLine($"declare const {name}: __Feather_{name};");
+            }
+            sb.AppendLine("declare function List<T>(item: T): T[];");
+            sb.AppendLine();
+            sb.AppendLine("declare function importNamespace(namespace: string): any;");
+            sb.AppendLine("declare function require(path: string): any;");
+            sb.AppendLine("declare const Feather: {");
+            sb.AppendLine("    require(path: string): any;");
+            sb.AppendLine("    /** First active JS instance — pass class name string or the class ctor. */");
+            sb.AppendLine("    findBehaviour(className: string | Function): any;");
+            sb.AppendLine("    /** All active JS instances — pass class name string or the class ctor. */");
+            sb.AppendLine("    findBehaviours(className: string | Function): any[];");
+            sb.AppendLine("};");
+            sb.AppendLine();
+            sb.AppendLine("// Host MonoBehaviour for all JS scripts (not a per-script C# type)");
+            sb.AppendLine("declare const JavaScriptBehaviour: typeof Unity.MonoBehaviour & (new (...args: any[]) => Unity.MonoBehaviour);");
+            sb.AppendLine();
+            File.WriteAllText(Path.Combine(root, "Feather.d.ts"), sb.ToString());
+        }
+
+        /// <summary>Global ctor aliases for common Unity structs (<c>new Color(1,0,0)</c>).</summary>
+        private static readonly string[] ValueTypeCtorAliases =
+        {
+            "Color", "Color32", "Vector2", "Vector3", "Vector4", "Quaternion", "Rect",
+        };
+
+        /// <summary>Name → TypeScript type in the Unity ambient namespace.</summary>
+        private static readonly (string Name, string UnityType)[] RefMarkers =
+        {
+            ("GameObject", "Unity.GameObject"),
+            ("Transform", "Unity.Transform"),
+            ("Rigidbody", "Unity.Rigidbody"),
+            ("Rigidbody2D", "Unity.Rigidbody2D"),
+            ("Light", "Unity.Light"),
+            ("Camera", "Unity.Camera"),
+            ("AudioSource", "Unity.AudioSource"),
+            ("AudioClip", "Unity.AudioClip"),
+            ("Text", "Unity.Text"),
+            ("Button", "Unity.Button"),
+            ("Image", "Unity.Image"),
+            ("Slider", "Unity.Slider"),
+            ("Toggle", "Unity.Toggle"),
+            ("RawImage", "Unity.RawImage"),
+            ("Canvas", "Unity.Canvas"),
+            ("Animator", "Unity.Animator"),
+            ("Collider", "Unity.Collider"),
+            ("BoxCollider", "Unity.BoxCollider"),
+            ("SphereCollider", "Unity.SphereCollider"),
+            ("CapsuleCollider", "Unity.CapsuleCollider"),
+            ("MeshCollider", "Unity.MeshCollider"),
+            ("Collider2D", "Unity.Collider2D"),
+            ("BoxCollider2D", "Unity.BoxCollider2D"),
+            ("CircleCollider2D", "Unity.CircleCollider2D"),
+            ("PolygonCollider2D", "Unity.PolygonCollider2D"),
+            ("Renderer", "Unity.Renderer"),
+            ("MeshRenderer", "Unity.MeshRenderer"),
+            ("SpriteRenderer", "Unity.SpriteRenderer"),
+            ("LineRenderer", "Unity.LineRenderer"),
+            ("ParticleSystem", "Unity.ParticleSystem"),
+            ("Texture2D", "Unity.Texture2D"),
+            ("Texture", "Unity.Texture"),
+            ("Material", "Unity.Material"),
+            ("Mesh", "Unity.Mesh"),
+            ("Sprite", "Unity.Sprite"),
+            ("UnityEvent", "Unity.UnityEvent"),
+        };
+
+        private static void WriteUnityDefinitions(string root)
+        {
+            // Remove previous package definition files so disabled packages don't linger.
+            foreach (var stale in Directory.GetFiles(root, "Package.*.d.ts"))
+            {
+                try { File.Delete(stale); }
+                catch { /* ignore */ }
+            }
+
+            var assemblies = UnityApiSurface.GetAssemblies();
+            var unityByAssembly = new Dictionary<string, List<Type>>();
+            var packageByJsNs = new Dictionary<string, List<Type>>();
+
+            foreach (var assembly in assemblies)
+            {
+                var key = SanitizeFilePart(assembly.GetName().Name);
+                IEnumerable<Type> types;
+                try { types = assembly.GetExportedTypes(); }
+                catch (ReflectionTypeLoadException ex) { types = ex.Types.Where(t => t != null); }
+
+                foreach (var type in types)
+                {
+                    if (!UnityApiSurface.ShouldIncludeType(type))
+                        continue;
+
+                    if (type.Namespace.StartsWith("UnityEngine", StringComparison.Ordinal))
+                    {
+                        if (!unityByAssembly.ContainsKey(key))
+                            unityByAssembly[key] = new List<Type>();
+                        unityByAssembly[key].Add(type);
+                    }
+                    else if (UnityApiSurface.IsExtraClrAssembly(assembly.GetName().Name))
+                    {
+                        var jsNs = UnityApiSurface.NamespaceToJsIdentifier(type.Namespace);
+                        if (string.IsNullOrEmpty(jsNs)) continue;
+                        if (!packageByJsNs.ContainsKey(jsNs))
+                            packageByJsNs[jsNs] = new List<Type>();
+                        packageByJsNs[jsNs].Add(type);
+                    }
+                }
+            }
+
+            var barrel = new StringBuilder();
+            barrel.AppendLine("// Auto-generated Unity TypeScript definitions for Feather");
+            barrel.AppendLine("// IntelliSense only — runtime is Jint CLR via UnityApiSurface");
+            barrel.AppendLine("// Generated at: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+            barrel.AppendLine("// Stamp: " + UnityApiSurface.GetStamp());
+            barrel.AppendLine();
+            barrel.AppendLine("declare namespace Unity {");
+
+            // First pass: all emitted names (so TsType can emit `any` for missing nested types)
+            var emitted = new HashSet<string>();
+            var typesToEmit = new List<(string key, Type type)>();
+            foreach (var kv in unityByAssembly.OrderBy(k => k.Key))
+            {
+                foreach (var type in kv.Value.OrderBy(t => t.Name))
+                {
+                    if (!emitted.Add(type.Name)) continue;
+                    typesToEmit.Add((kv.Key, type));
+                }
+            }
+
+            foreach (var group in typesToEmit.GroupBy(t => t.key))
+            {
+                var fileName = $"Unity.{group.Key}.d.ts";
+                var sb = new StringBuilder();
+                sb.AppendLine($"// Auto-generated from assembly group {group.Key}");
+                sb.AppendLine("declare namespace Unity {");
+
+                foreach (var (_, type) in group)
+                {
+                    AppendType(sb, type, "    ", emitted);
+                    AppendType(barrel, type, "    ", emitted);
+                }
+
+                sb.AppendLine("}");
+                File.WriteAllText(Path.Combine(root, fileName), sb.ToString());
+            }
+
+            barrel.AppendLine("}");
+            barrel.AppendLine();
+            // Do NOT emit `declare var Unity: typeof Unity` — it circularly poisons the namespace.
+            File.WriteAllText(Path.Combine(root, "Unity.d.ts"), barrel.ToString());
+
+            WritePackageDefinitions(root, packageByJsNs);
+        }
+
+        private static void WritePackageDefinitions(string root, Dictionary<string, List<Type>> packageByJsNs)
+        {
+            foreach (var kv in packageByJsNs.OrderBy(k => k.Key))
+            {
+                var jsNs = kv.Key;
+                var emitted = new HashSet<string>();
+                var sb = new StringBuilder();
+                sb.AppendLine($"// Auto-generated package types for Feather (global alias: {jsNs})");
+                sb.AppendLine($"// CLR: importNamespace — dots become underscores in the JS global name");
+                sb.AppendLine($"declare namespace {jsNs} {{");
+
+                foreach (var type in kv.Value.OrderBy(t => t.Name))
+                {
+                    if (!emitted.Add(type.Name)) continue;
+                    AppendType(sb, type, "    ", emitted);
+                }
+
+                sb.AppendLine("}");
+                sb.AppendLine($"declare const {jsNs}: typeof {jsNs};");
+                File.WriteAllText(Path.Combine(root, $"Package.{SanitizeFilePart(jsNs)}.d.ts"), sb.ToString());
             }
         }
-        
-        private static void WriteDefinitionFile(string fileName, string content)
+
+        private static void WriteProjectDefinitions(string root)
         {
-            // Project root is one level above Assets folder
-            var projectRoot = Directory.GetParent(Application.dataPath).FullName;
-            var fullPath = Path.Combine(projectRoot, OUTPUT_PATH, fileName);
-            File.WriteAllText(fullPath, content);
+            var fingerprint = ComputeProjectDefinitionsFingerprint();
+            var text = BuildProjectDefinitionsText(fingerprint);
+            File.WriteAllText(Path.Combine(root, "Project.d.ts"), text);
+            File.WriteAllText(Path.Combine(root, "FeatherProjectDefsStamp.txt"), fingerprint);
         }
-    }
-    
-    // Extension methods for reflection
-    public static class ReflectionExtensions
-    {
-        public static bool IsStatic(this PropertyInfo prop)
+
+        /// <summary>
+        /// Stable hash of project Component types + public instance methods (for skip-if-unchanged).
+        /// Must run on the main thread after assemblies are loaded.
+        /// </summary>
+        public static string ComputeProjectDefinitionsFingerprint()
         {
-            return prop.GetMethod?.IsStatic == true || prop.SetMethod?.IsStatic == true;
+            var sb = new StringBuilder(256);
+            foreach (var type in UnityApiSurface.GetProjectComponentTypes())
+            {
+                sb.Append(type.FullName ?? type.Name).Append('\n');
+                foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                             .Where(m => !m.IsSpecialName)
+                             .OrderBy(m => m.Name)
+                             .Take(40))
+                {
+                    sb.Append("  ").Append(method.Name).Append('(');
+                    sb.Append(string.Join(",", method.GetParameters().Select(p => p.ParameterType.FullName ?? p.ParameterType.Name)));
+                    sb.Append(")\n");
+                }
+            }
+
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString()));
+            var hex = new StringBuilder(hash.Length * 2);
+            foreach (var b in hash)
+                hex.Append(b.ToString("x2"));
+            return hex.ToString();
+        }
+
+        public static string BuildProjectDefinitionsText(string fingerprint = null)
+        {
+            fingerprint ??= ComputeProjectDefinitionsFingerprint();
+
+            var sb = new StringBuilder();
+            sb.AppendLine("// Auto-generated project Component types for Feather IntelliSense / decorators");
+            sb.AppendLine("// Generated at: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+            sb.AppendLine("// Fingerprint: " + fingerprint);
+            sb.AppendLine();
+
+            foreach (var type in UnityApiSurface.GetProjectComponentTypes())
+            {
+                // interface + const marker so `field = MyMono` types as the instance;
+                // `& (new () => …)` so FindObjectOfType(MyMono) accepts it as a type ctor.
+                sb.AppendLine($"interface {type.Name} extends Unity.MonoBehaviour {{");
+                foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                             .Where(m => !m.IsSpecialName)
+                             .Take(40))
+                {
+                    var parameters = string.Join(", ", method.GetParameters().Select(p => $"{SafeName(p.Name)}: any"));
+                    sb.AppendLine($"    {method.Name}({parameters}): any;");
+                }
+                sb.AppendLine("}");
+                sb.AppendLine($"declare const {type.Name}: {type.Name} & (new (...args: any[]) => {type.Name}) & PropertyDecorator;");
+                sb.AppendLine();
+            }
+
+            return sb.ToString();
+        }
+
+        private static void AppendType(StringBuilder sb, Type type, string indent, HashSet<string> emittedUnityNames)
+        {
+            if (type.IsEnum)
+            {
+                sb.AppendLine($"{indent}enum {type.Name} {{");
+                foreach (var name in Enum.GetNames(type))
+                {
+                    try
+                    {
+                        var value = Convert.ToInt64(Enum.Parse(type, name));
+                        sb.AppendLine($"{indent}    {name} = {value},");
+                    }
+                    catch
+                    {
+                        sb.AppendLine($"{indent}    {name},");
+                    }
+                }
+                sb.AppendLine($"{indent}}}");
+                sb.AppendLine();
+                return;
+            }
+
+            var isStatic = type.IsAbstract && type.IsSealed;
+            // Structs (Color, Vector3, …) must be `class` so `new Unity.Color(...)` / statics type-check.
+            // Interfaces cannot be constructed and make static members awkward in TS.
+            var inherits = "";
+            if (!type.IsValueType && type.BaseType != null && type.BaseType != typeof(object) &&
+                type.BaseType != typeof(ValueType) && UnityApiSurface.ShouldIncludeType(type.BaseType) &&
+                emittedUnityNames.Contains(type.BaseType.Name))
+            {
+                // Unqualified: we emit inside `declare namespace Unity`, so Object → Unity.Object.
+                inherits = $" extends {type.BaseType.Name}";
+            }
+
+            // C# static classes → TS class with static members (NOT namespace + static, which is invalid TS)
+            if (isStatic)
+            {
+                sb.AppendLine($"{indent}class {type.Name} {{");
+                sb.AppendLine($"{indent}    private constructor();");
+            }
+            else
+            {
+                sb.AppendLine($"{indent}class {type.Name}{inherits} {{");
+            }
+
+            var flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+
+            foreach (var field in type.GetFields(flags).Where(f => !f.IsSpecialName).Take(80))
+            {
+                var st = field.IsStatic || isStatic ? "static " : "";
+                sb.AppendLine($"{indent}    {st}{field.Name}: {TsType(field.FieldType, emittedUnityNames)};");
+            }
+
+            foreach (var prop in type.GetProperties(flags).Where(p => p.GetIndexParameters().Length == 0).Take(80))
+            {
+                var getter = prop.GetMethod;
+                var st = (getter?.IsStatic == true) || isStatic ? "static " : "";
+                var ro = !prop.CanWrite ? "readonly " : "";
+                sb.AppendLine($"{indent}    {st}{ro}{prop.Name}: {TsType(prop.PropertyType, emittedUnityNames)};");
+            }
+
+            foreach (var ctor in type.GetConstructors(BindingFlags.Public | BindingFlags.Instance).Take(8))
+            {
+                if (isStatic) continue;
+                var parameters = string.Join(", ", ctor.GetParameters().Select(p => $"{SafeName(p.Name)}?: {TsType(p.ParameterType, emittedUnityNames)}"));
+                sb.AppendLine($"{indent}    constructor({parameters});");
+            }
+
+            foreach (var method in SelectMethodsForDts(type.GetMethods(flags).Where(m => !m.IsSpecialName)))
+            {
+                var st = method.IsStatic || isStatic ? "static " : "";
+                var parameters = string.Join(", ", method.GetParameters().Select(p => $"{SafeName(p.Name)}?: {TsType(p.ParameterType, emittedUnityNames)}"));
+                sb.AppendLine($"{indent}    {st}{method.Name}({parameters}): {TsType(method.ReturnType, emittedUnityNames)};");
+            }
+
+            // C# operators → friendly static aliases (JS has no `color * 0.5`).
+            // Runtime binds these via __featherWrapMathType → CLR op_*.
+            foreach (var method in type.GetMethods(flags)
+                         .Where(m => m.IsSpecialName && m.IsStatic && UnityApiSurface.OperatorAliasNames.ContainsKey(m.Name))
+                         .OrderBy(m => m.Name)
+                         .ThenBy(m => m.GetParameters().Length)
+                         .Take(24))
+            {
+                var alias = UnityApiSurface.OperatorAliasNames[method.Name];
+                var parameters = string.Join(", ", method.GetParameters().Select(p => $"{SafeName(p.Name)}?: {TsType(p.ParameterType, emittedUnityNames)}"));
+                sb.AppendLine($"{indent}    static {alias}({parameters}): {TsType(method.ReturnType, emittedUnityNames)};");
+            }
+
+            sb.AppendLine($"{indent}}}");
+            sb.AppendLine();
+        }
+
+        /// <summary>
+        /// Prefer concrete <c>System.Type</c> overloads (e.g. FindObjectOfType(type)) over parameterless generics.
+        /// </summary>
+        private static IEnumerable<MethodInfo> SelectMethodsForDts(IEnumerable<MethodInfo> methods)
+        {
+            foreach (var group in methods.GroupBy(m => m.Name).Take(80))
+            {
+                var all = group.OrderBy(m => m.GetParameters().Length).ToList();
+                var typeOverloads = all
+                    .Where(m => !m.IsGenericMethod && !m.ContainsGenericParameters &&
+                                m.GetParameters().Any(p => p.ParameterType == typeof(Type)))
+                    .Take(4)
+                    .ToList();
+
+                if (typeOverloads.Count > 0)
+                {
+                    foreach (var m in typeOverloads)
+                        yield return m;
+                    continue;
+                }
+
+                yield return all.First();
+            }
+        }
+
+        /// <summary>Types inside <c>declare namespace Unity</c> — bare names only when emitted; else <c>any</c>.</summary>
+        private static string TsType(Type type, HashSet<string> emittedUnityNames)
+        {
+            if (type == typeof(Type)) return "any"; // pass CLR type ctor: FindObjectOfType(Unity.Light)
+            if (type == null || type == typeof(void)) return "void";
+            if (type.IsGenericParameter) return "any";
+            if (type.IsPointer) return "any";
+            if (type == typeof(bool)) return "boolean";
+            if (type == typeof(string)) return "string";
+            if (type == typeof(char)) return "string";
+            if (type.IsPrimitive) return "number";
+            if (type == typeof(decimal)) return "number";
+            if (type == typeof(object)) return "any";
+            if (type.IsArray) return TsType(type.GetElementType(), emittedUnityNames) + "[]";
+            if (type.IsByRef) return TsType(type.GetElementType(), emittedUnityNames);
+            if (type.IsGenericType) return "any";
+            if (type.IsNested) return "any"; // nested types are not emitted as top-level Unity.* names
+            if (type.Namespace != null && type.Namespace.StartsWith("UnityEngine"))
+                return emittedUnityNames != null && emittedUnityNames.Contains(type.Name) ? type.Name : "any";
+            return "any";
+        }
+
+        /// <summary>External references (Feather.d.ts) always qualify with <c>Unity.</c>.</summary>
+        private static string TsTypeExternal(Type type)
+        {
+            if (type == null || type == typeof(void)) return "void";
+            if (type.IsGenericParameter) return "any";
+            if (type == typeof(bool)) return "boolean";
+            if (type == typeof(string) || type == typeof(char)) return "string";
+            if (type.IsPrimitive || type == typeof(decimal)) return "number";
+            if (type == typeof(object)) return "any";
+            if (type.IsArray) return TsTypeExternal(type.GetElementType()) + "[]";
+            if (type.IsByRef) return TsTypeExternal(type.GetElementType());
+            if (type.IsGenericType) return "any";
+            if (type.Namespace != null && type.Namespace.StartsWith("UnityEngine"))
+                return "Unity." + type.Name;
+            return "any";
+        }
+
+        private static string SafeName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "arg";
+            if (name is "function" or "var" or "let" or "const" or "class" or "default" or "enum" or "export" or "import")
+                return "_" + name;
+            return name.Replace("<", "").Replace(">", "").Replace(",", "");
+        }
+
+        private static string SanitizeFilePart(string name)
+        {
+            return name.Replace("UnityEngine.", "").Replace(".", "_").Replace(" ", "");
         }
     }
 }

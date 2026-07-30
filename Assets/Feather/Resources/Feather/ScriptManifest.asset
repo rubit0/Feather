@@ -1,0 +1,17 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 173e5bfaad94946e9a0599286382afc5, type: 3}
+  m_Name: ScriptManifest
+  m_EditorClassIdentifier: Assembly-CSharp::Feather.ScriptManifest
+  scripts:
+  - {fileID: 1042094116111776886, guid: 2f5a206b7f31f4bc58cc45243e571d49, type: 3}
+  - {fileID: 4900000, guid: 831fa4c292f9a4c0b9f8b8cf3059cbcf, type: 3}

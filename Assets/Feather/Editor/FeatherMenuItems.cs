@@ -1,3 +1,4 @@
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -5,147 +6,110 @@ namespace Feather.Editor
 {
     public static class FeatherMenuItems
     {
-        [MenuItem("Component/Feather/JavaScript Behaviour", false, 0)]
-        public static void AddJavaScriptBehaviour()
+        [MenuItem("Component/Feather/Add JavaScript…", false, 0)]
+        public static void OpenAddJavaScriptPicker()
+        {
+            AddJavaScriptPickerWindow.ShowWindow();
+        }
+
+        [MenuItem("Component/Feather/JavaScript Behaviour (empty)", false, 100)]
+        public static void AddEmptyJavaScriptBehaviour()
         {
             var selected = Selection.activeGameObject;
             if (selected == null)
             {
-                EditorUtility.DisplayDialog("No GameObject Selected", 
-                    "Please select a GameObject in the hierarchy to add a JavaScript component.", "OK");
+                EditorUtility.DisplayDialog("No GameObject Selected",
+                    "Select a GameObject, or use Component → Feather → Add JavaScript…", "OK");
                 return;
             }
-            
-            Undo.RegisterCreatedObjectUndo(selected, "Add JavaScript Behaviour");
-            var scriptBehaviour = selected.AddComponent<JavaScriptBehaviour>();
-            
-            // Focus the inspector on the new component
+
+            Undo.AddComponent<JavaScriptBehaviour>(selected);
             Selection.activeGameObject = selected;
-            EditorGUIUtility.PingObject(scriptBehaviour);
-            
-            // Debug.Log($"Added JavaScript Behaviour to '{selected.name}'. Assign a .js file to get started.");
         }
-        
-        [MenuItem("Component/Feather/JavaScript Behaviour", true)]
-        public static bool ValidateAddJavaScriptBehaviour()
-        {
-            return Selection.activeGameObject != null;
-        }
-        
-        [MenuItem("GameObject/Feather/Create JavaScript GameObject", false, 0)]
-        public static void CreateJavaScriptGameObject()
-        {
-            var go = new GameObject("JavaScript GameObject");
-            go.AddComponent<JavaScriptBehaviour>();
-            
-            // Position it in the scene
-            if (SceneView.lastActiveSceneView?.camera != null)
-            {
-                var camera = SceneView.lastActiveSceneView.camera;
-                go.transform.position = camera.transform.position + camera.transform.forward * 2f;
-            }
-            
-            Undo.RegisterCreatedObjectUndo(go, "Create JavaScript GameObject");
-            Selection.activeGameObject = go;
-            
-            // Debug.Log("Created new GameObject with JavaScript Behaviour. Assign a .js file to get started.");
-        }
-        
-        [MenuItem("Assets/Create/JavaScript Behaviour", false, 80)]
-        public static void CreateJavaScriptFile()
-        {
-            var path = EditorUtility.SaveFilePanel("Create JavaScript File", 
-                "Assets", "NewBehaviour", "js");
-                
-            if (!string.IsNullOrEmpty(path))
-            {
-                // Make path relative to Assets folder
-                if (path.StartsWith(Application.dataPath))
-                {
-                    path = "Assets" + path.Substring(Application.dataPath.Length);
-                }
-                
-                var className = System.IO.Path.GetFileNameWithoutExtension(path);
-                var template = CreateJavaScriptTemplate(className);
-                
-                System.IO.File.WriteAllText(path, template);
-                AssetDatabase.Refresh();
-                
-                // Select and highlight the new file
-                var asset = AssetDatabase.LoadAssetAtPath<TextAsset>(path);
-                Selection.activeObject = asset;
-                EditorGUIUtility.PingObject(asset);
-                
-                // Debug.Log($"Created JavaScript file: {path}");
-            }
-        }
-        
-        private static void CreateJavaScriptFileInSelectedFolder(string defaultName)
-        {
-            // Get the selected folder path or default to Assets
-            string folderPath = GetSelectedFolderPath();
-            
-            // Generate unique filename
-            string fileName = AssetDatabase.GenerateUniqueAssetPath($"{folderPath}/{defaultName}.js");
-            
-            // Extract class name from filename
-            string className = System.IO.Path.GetFileNameWithoutExtension(fileName);
-            
-            // Create the file with template
-            var template = CreateJavaScriptTemplate(className);
-            System.IO.File.WriteAllText(fileName, template);
-            
-            // Refresh and select the new file
-            AssetDatabase.Refresh();
-            var asset = AssetDatabase.LoadAssetAtPath<TextAsset>(fileName);
-            Selection.activeObject = asset;
-            EditorGUIUtility.PingObject(asset);
-            
-            // Start rename mode like Unity does for C# scripts
-            EditorApplication.delayCall += () => {
-                if (asset != null)
-                {
-                    var instanceID = asset.GetInstanceID();
-                    EditorGUIUtility.PingObject(instanceID);
-                    // This triggers the rename mode in the project window
-                    Selection.activeInstanceID = instanceID;
-                }
-            };
-        }
-        
-        private static string GetSelectedFolderPath()
-        {
-            // Check if a folder is selected in the project window
-            foreach (var obj in Selection.GetFiltered<UnityEngine.Object>(SelectionMode.Assets))
-            {
-                var path = AssetDatabase.GetAssetPath(obj);
-                if (System.IO.Directory.Exists(path))
-                {
-                    return path;
-                }
-                else if (System.IO.File.Exists(path))
-                {
-                    return System.IO.Path.GetDirectoryName(path);
-                }
-            }
-            return "Assets"; // Default to Assets folder if nothing is selected
-        }
-        
-        private static string CreateJavaScriptTemplate(string className)
-        {
-            return $@"class {className} extends jsBehaviour {{
 
-    // Start is called before the first frame update
-    Start() {{
-        
-    }}
+        [MenuItem("Component/Feather/JavaScript Behaviour (empty)", true)]
+        public static bool ValidateAddEmpty() => Selection.activeGameObject != null;
 
-    // Update is called once per frame
-    Update() {{
-        
-    }}
+        // Unity 6 Create menu: keep this top-level; low priority so it sits near Scripting/Shader, not at the bottom (81).
+        [MenuItem("Assets/Create/JavaScript Behaviour", false, 1)]
+        public static void CreateJavaScriptFileInPlace()
+        {
+            const string templatePath = "Assets/Feather/Editor/Templates/JavaScriptBehaviour.js.txt";
+            ProjectWindowUtil.CreateScriptAssetFromTemplateFile(templatePath, "JavaScriptBehaviour.js");
+        }
+    }
 
-}}";
+    public class AddJavaScriptPickerWindow : EditorWindow
+    {
+        private Vector2 _scroll;
+        private string _filter = "";
+        private (string path, JavaScript asset, string className)[] _entries;
+
+        public static void ShowWindow()
+        {
+            var wnd = GetWindow<AddJavaScriptPickerWindow>(true, "Add JavaScript", true);
+            wnd.minSize = new Vector2(360, 280);
+            wnd.Refresh();
+            wnd.ShowUtility();
+        }
+
+        private void OnEnable() => Refresh();
+
+        private void Refresh()
+        {
+            var guids = AssetDatabase.FindAssets("t:JavaScript", new[] { "Assets" });
+            _entries = guids
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .Where(p => p.EndsWith(".js") || p.EndsWith(".jsu") || p.EndsWith(".jsfeather"))
+                .Select(p =>
+                {
+                    var asset = AssetDatabase.LoadAssetAtPath<JavaScript>(p);
+                    if (asset == null || !asset.ExtendsJsBehaviour)
+                        return (path: p, asset: (JavaScript)null, className: (string)null);
+                    var className = !string.IsNullOrEmpty(asset.ClassName) ? asset.ClassName : asset.name;
+                    return (path: p, asset: asset, className: className);
+                })
+                .Where(e => e.className != null && e.asset != null)
+                .OrderBy(e => e.className)
+                .ToArray();
+        }
+
+        private void OnGUI()
+        {
+            EditorGUILayout.LabelField("Select a JavaScript behaviour to add", EditorStyles.boldLabel);
+            _filter = EditorGUILayout.TextField("Search", _filter);
+
+            var go = Selection.activeGameObject;
+            if (go == null)
+            {
+                EditorGUILayout.HelpBox("Select a GameObject in the Hierarchy first.", MessageType.Warning);
+            }
+
+            _scroll = EditorGUILayout.BeginScrollView(_scroll);
+            foreach (var entry in _entries)
+            {
+                if (!string.IsNullOrEmpty(_filter) &&
+                    entry.className.IndexOf(_filter, System.StringComparison.OrdinalIgnoreCase) < 0 &&
+                    entry.path.IndexOf(_filter, System.StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField(entry.className, GUILayout.MinWidth(120));
+                EditorGUILayout.LabelField(entry.path, EditorStyles.miniLabel);
+                using (new EditorGUI.DisabledScope(go == null))
+                {
+                    if (GUILayout.Button("Add", GUILayout.Width(48)))
+                    {
+                        JavaScriptDragDropHandler.AddJavaScriptComponent(go, entry.asset);
+                        Close();
+                    }
+                }
+                EditorGUILayout.EndHorizontal();
+            }
+            EditorGUILayout.EndScrollView();
+
+            if (GUILayout.Button("Refresh"))
+                Refresh();
         }
     }
 }

@@ -1,0 +1,22 @@
+class #SCRIPTNAME# extends jsBehaviour {
+
+    // Only @Public fields show in the Inspector
+    // @Public
+    // @Header("Stats")
+    // @Range(0, 10)
+    // @Tooltip("Movement speed")
+    // speed = 5.0;
+    //
+    // @Public
+    // @Required
+    // target = Transform;
+
+    Start() {
+        #NOTRIM#
+    }
+
+    Update() {
+        #NOTRIM#
+    }
+
+}

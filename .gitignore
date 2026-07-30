@@ -58,3 +58,5 @@ sysinfo.txt
 crashlytics-build.properties
 ProjectSettings/RiderScriptEditorPersistedState.asset
 ProjectSettings/SceneTemplateSettings.json
+*.ts
+*.ts
